@@ -76,14 +76,44 @@ Each skill triggers automatically on matching work (React, Python, or full-stack
 
 Optional: copy `plugins/python-react-fullstack/CLAUDE.example.md` to `~/.claude/CLAUDE.md` so Claude detects React projects and applies the skill consistently.
 
-## Get updates
+## Updating the plugin
+
+### Get the latest version (users)
+
+From a terminal:
 
 ```bash
-claude plugin marketplace update engineering-team
-claude plugin update python-react-fullstack@engineering-team
+claude plugin marketplace update engineering-team                 # fetch the latest catalog from GitHub
+claude plugin update python-react-fullstack@engineering-team      # install the new version
 ```
 
-Updates arrive only when the plugin's `version` changes. Restart the session afterwards.
+If you installed with `--scope project` (or `local`), pass the same scope to the update:
+
+```bash
+claude plugin update python-react-fullstack@engineering-team --scope project
+```
+
+Then restart Claude Code (or run `/reload-plugins` in an open session). Updates don't apply to sessions that are already running.
+
+Check which version you have:
+
+```bash
+claude plugin list        # shows python-react-fullstack@engineering-team with its Version
+```
+
+Compare it with `version` in [`plugins/python-react-fullstack/.claude-plugin/plugin.json`](plugins/python-react-fullstack/.claude-plugin/plugin.json) on `main`.
+
+**Not getting the new changes?**
+
+- The update only happens when `version` in `plugin.json` changes. A push without a version bump is not picked up.
+- Run `claude plugin marketplace update engineering-team` first. `plugin update` only sees versions the local catalog knows about.
+- Still stuck: `claude plugin uninstall python-react-fullstack@engineering-team`, then install again.
+
+### Publish an update (maintainers)
+
+1. Edit the skill files and bump `version` in `plugins/python-react-fullstack/.claude-plugin/plugin.json` (see [Contributing](#contributing) for semver).
+2. Run `claude plugin validate .`, then merge to `main`.
+3. Tell the team to run the two update commands above. The `.claude/settings.json` in team repos doesn't need to change, because it enables the plugin by name, not by version.
 
 ## Uninstall
 
@@ -125,7 +155,8 @@ plugins/
    ```bash
    claude plugin validate .
    claude plugin marketplace add ./      # from your clone
-      ```
+   claude plugin install python-react-fullstack@engineering-team
+   ```
 4. Open a pull request. A code owner reviews before merge.
 
 ### Adding a new skill

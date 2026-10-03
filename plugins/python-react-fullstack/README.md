@@ -65,4 +65,4 @@ Types: `fastapi` (`--layout modular|layered`), `library`, `cli`. Options: `--pyt
 
 ## Customizing for your org
 
-Edit the skill's `references/` or `assets/templates/` (line length, coverage threshold, rule sets, component templates) and bump `version` in `.claude-plugin/plugin.json`. Teams pick up changes with `/plugin marketplace update engineering-team`.
+Edit the skill's `references/` or `assets/templates/` (line length, coverage threshold, rule sets, component templates) and bump `version` in `.claude-plugin/plugin.json`. Teams pick up changes with `claude plugin marketplace update engineering-team` followed by `claude plugin update python-react-fullstack@engineering-team`. See [Updating the plugin](../../README.md#updating-the-plugin).
