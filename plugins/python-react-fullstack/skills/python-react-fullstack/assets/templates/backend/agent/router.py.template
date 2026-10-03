@@ -3,23 +3,34 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, status
 
 from app.core.sse import EventStreamResponse, format_sse
 
 from .events import RunFailedEvent
-from .schemas import AgentRunRequest
+from .schemas import ConversationRead, SendMessageRequest
 from .service import AgentService, get_agent_service
 from .streaming import with_heartbeat
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/agent", tags=["agent"])
+router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 AgentServiceDep = Annotated[AgentService, Depends(get_agent_service)]
 
 
+@router.post("", response_model=ConversationRead, status_code=status.HTTP_201_CREATED)
+async def create_conversation(agent: AgentServiceDep) -> ConversationRead:
+    # Create the conversation first, then stream into it: the frontend always knows the id.
+    return agent.create_conversation()
+
+
+@router.get("/{conversation_id}", response_model=ConversationRead)
+async def get_conversation(conversation_id: str, agent: AgentServiceDep) -> ConversationRead:
+    return agent.get_conversation(conversation_id)
+
+
 @router.post(
-    "/runs/stream",
+    "/{conversation_id}/messages/stream",
     response_class=EventStreamResponse,
     responses={
         200: {
@@ -28,13 +39,17 @@ AgentServiceDep = Annotated[AgentService, Depends(get_agent_service)]
         }
     },
 )
-async def stream_agent_run(body: AgentRunRequest, request: Request, agent: AgentServiceDep) -> EventStreamResponse:
-    # Add `user: CurrentUser` once auth is in place. Auth/validation failures happen before
-    # streaming starts and return normal Problem Details; after the 200, errors become run_failed.
+async def stream_reply(
+    conversation_id: str, body: SendMessageRequest, request: Request, agent: AgentServiceDep
+) -> EventStreamResponse:
+    # Checked before streaming starts, so a bad id is a normal 404 Problem Details response.
+    # After the 200 is sent, errors can only be reported as a run_failed event.
+    agent.get_conversation(conversation_id)
+
     async def events() -> AsyncIterator[str]:
         seq = 0
         try:
-            async for item in with_heartbeat(agent.run(body), interval=15):
+            async for item in with_heartbeat(agent.reply(conversation_id, body.content), interval=15):
                 if await request.is_disconnected():
                     break
                 if isinstance(item, str):  # heartbeat comment
@@ -45,7 +60,7 @@ async def stream_agent_run(body: AgentRunRequest, request: Request, agent: Agent
         except asyncio.CancelledError:
             raise  # client went away; let cleanup run
         except Exception:
-            logger.exception("agent run failed")
-            yield format_sse(RunFailedEvent(code="agent_failed", message="The agent run failed"))
+            logger.exception("reply failed")
+            yield format_sse(RunFailedEvent(code="reply_failed", message="The assistant could not reply"))
 
     return EventStreamResponse(events())

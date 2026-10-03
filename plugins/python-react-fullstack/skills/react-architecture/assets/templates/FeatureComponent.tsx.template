@@ -1,0 +1,8 @@
+// features/{{feature}}/components/{{Name}}.tsx — one file: props interface on top, component below.
+interface {{Name}}Props {
+  // props
+}
+
+export function {{Name}}({ /* props */ }: {{Name}}Props) {
+  return <div>{/* ... */}</div>;
+}

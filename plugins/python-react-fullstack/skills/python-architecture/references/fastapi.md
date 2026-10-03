@@ -137,7 +137,7 @@ Structured logging (JSON in production, e.g. `structlog` or `python-json-logger`
 
 ## Checklist: adding a feature module (modular layout)
 
-1. Copy the `items/` package pattern: `models.py`, `schemas.py`, `repository.py` (Protocol + implementation), `service.py`, `exceptions.py`, `dependencies.py`, `router.py`.
+1. Copy the `items/` package pattern: `models.py`, `schemas.py`, `repository.py` (Protocol + implementation), `service.py`, `exceptions.py`, `dependencies.py`, `router.py`. For a small module, put the `get_<x>_service` function and its `Annotated` alias at the top of `router.py` and skip `dependencies.py`; split it out when another module needs the dependency or tests override it often.
 2. Register the router in `api.py`.
 3. If it has tables: model inherits `Base`, then `make migration m="add <feature>"`, review, `make migrate`.
 4. Tests in `tests/<feature>/`: service tests with a fake repository, router tests through the client.

@@ -9,6 +9,12 @@ description: Full-stack standards for a Python FastAPI backend with a React + Ty
 
 When a situation isn't covered below, choose the option that keeps the contract machine-checked end to end.
 
+## The project's own rules come first
+
+Read the project's `CLAUDE.md` (and any README conventions) before applying this skill. If it says to keep things simple, favor readable code over abstractions, skip tests, or use a lighter setup, **follow the project**. This skill's defaults (tests on both sides, strict linting, the full folder structure) are a starting point for teams that haven't decided, not rules that override the project. The contract rules below (generated types, one HTTP client, one error format) are the part worth keeping even in a small project, because they are what catch backend/frontend mismatches.
+
+Prefer the plainest code that works. If a pattern needs a comment to explain how it works, choose a simpler one.
+
 ```
 Pydantic schemas ──► FastAPI app.openapi() ──► contract/openapi.json (committed)
                                                         │
@@ -53,7 +59,7 @@ How they combine:
 │   └── src/
 │       ├── lib/api/schema.d.ts   # GENERATED — never edit
 │       ├── lib/http.ts           # the one typed client + ApiError
-│       └── features/<f>/api/     # <f>.api.ts, <f>.queries.ts, <f>.keys.ts
+│       └── features/<f>/<f>.api.ts  # calls, query keys and hooks; split only when it gets long
 ├── contract/openapi.json     # GENERATED from backend, committed, diffed in CI
 ├── Makefile                  # `make api` = export spec + regenerate types
 └── docker-compose.yml
@@ -67,12 +73,12 @@ Backend and frontend **features mirror each other by name** (`backend/app/featur
 2. **camelCase on the wire, snake_case in Python.** All schemas inherit one `ApiModel` base with a camelCase alias generator, so TypeScript code reads naturally and Python stays idiomatic.
 3. **Stable operation IDs.** Configure `generate_unique_id_function` so generated names don't change when a path or tag changes.
 4. **Generated code is committed and never edited.** CI regenerates the spec and types and fails on any diff. Frontend-only shapes (view models, form state) live in the feature's `types.ts` and are derived from generated types.
-5. **One HTTP client.** `lib/http.ts` exports the typed client and `ApiError`. Only `features/<f>/api/*.api.ts` calls it; components call query hooks, never `fetch`.
+5. **One HTTP client.** `lib/http.ts` exports the typed client and `ApiError`. Only the feature API files (`features/<f>/<f>.api.ts`) call it; components call query hooks, never `fetch`.
 6. **One error format.** Every non-2xx response is RFC 9457 Problem Details (`application/problem+json`) with a machine-readable `code` and optional field `errors`. The frontend turns it into one `ApiError` class, and maps 422 field errors straight onto React Hook Form.
 7. **Thin routers.** Routers translate HTTP ↔ domain (parse, call service, return schema). Business logic lives in services, data access in repositories. Services raise domain errors; they never import FastAPI.
 8. **Same-origin by default.** Vite's dev proxy in development and a reverse proxy in production put the SPA and `/api` on one origin, which removes most CORS and cookie problems. CORS is the fallback for genuinely cross-origin setups, with explicit origins — never `*` with credentials.
 9. **Pick auth by deployment shape, not habit.** Use the decision table in `references/auth.md`. Never put long-lived tokens in `localStorage`.
-10. **Stream with SSE, converse with WebSockets.** Server→client streams (LLM tokens, agent steps, progress) use SSE over `fetch` with a typed, discriminated event union. Use WebSockets only for genuinely bidirectional, low-latency traffic.
+10. **Stream with SSE, converse with WebSockets.** Server→client streams (LLM tokens, agent steps, progress) use SSE over `fetch` with a typed event union. For chat, create the conversation first and then stream into it, and write the streamed text into the cached conversation (`references/streaming.md`, section 1). Use WebSockets only for genuinely bidirectional, low-latency traffic.
 
 ## Workflow: adding a feature end to end
 
@@ -83,9 +89,9 @@ Follow this order; each step makes the next one type-checked.
 3. **Router** — thin endpoint with `response_model`, status code, dependencies; include it in `api/v1/router.py`.
 4. **Backend tests** — `httpx.AsyncClient` against the app; assert status codes and the problem-details body for failures.
 5. **Regenerate the contract** — `make api` (exports `contract/openapi.json`, runs `openapi-typescript`).
-6. **Frontend API layer** — `features/<f>/api/<f>.api.ts` (raw calls), `<f>.keys.ts` (query key factory), `<f>.queries.ts` (hooks). Re-export domain types in `features/<f>/types.ts`.
+6. **Frontend API layer** — one `features/<f>/<f>.api.ts` with the raw calls, the query keys and the hooks. Re-export domain types in `features/<f>/types.ts`. Split it into an `api/` folder (calls, keys, hooks) only once it grows past about 150 lines.
 7. **UI** — components use the hooks; mutations invalidate the right keys; forms map `ApiError.fieldErrors` onto fields.
-8. **Frontend tests** — MSW handlers typed from the generated schema.
+8. **Frontend tests** — MSW handlers typed from the generated schema. Skip steps 4 and 8 if the project's `CLAUDE.md` says not to write tests.
 
 ## Which reference to read
 
@@ -94,7 +100,7 @@ Follow this order; each step makes the next one type-checked.
 | Scaffolding or reviewing backend structure, DI, settings, DB sessions, testing | `references/backend-structure.md` |
 | Wire conventions, errors, pagination, codegen, `lib/http.ts`, query hooks, CI drift check | `references/api-contract.md` |
 | Login, sessions, tokens, CSRF, OIDC/SSO, 401 handling | `references/auth.md` |
-| Streaming LLM/agent output, SSE, reconnects, WebSockets | `references/streaming.md` |
+| Streaming LLM/agent output, chat UIs, SSE, reconnects, WebSockets | `references/streaming.md` (start with section 1; sections 6–7 are optional extras) |
 | Uploads, downloads, long-running jobs, idempotency, optimistic updates, concurrency | `references/other-patterns.md` |
 | Monorepo, Vite proxy, CORS, env config, Docker Compose, CI pipeline | `references/dev-setup.md` |
 
@@ -120,13 +126,13 @@ Starting files live in `assets/templates/`, using `{{placeholder}}` substitution
 | `backend/db/{base,session}.py` | `backend/app/db/` |
 | `backend/api/deps.py`, `backend/api/v1_router.py` | `backend/app/api/deps.py`, `backend/app/api/v1/router.py` |
 | `backend/main.py`, `backend/export_openapi.py` | `backend/app/main.py`, `backend/app/scripts/export_openapi.py` |
-| `backend/feature/*.py` | `backend/app/features/{{feature_snake}}/` (one set per feature) |
-| `backend/agent/*.py` | `backend/app/features/agent/` (only for SSE/agent streaming; add `AgentEvent` to `EXTRA_MODELS`) |
+| `backend/feature/*.py` | `backend/app/features/{{feature_snake}}/` (one set per feature; the service wiring lives in `router.py`) |
+| `backend/agent/*.py` | `backend/app/features/agent/` (only for chat/streaming: conversations + SSE replies; include its router in `api/v1/router.py` and add `AgentEvent` to `EXTRA_MODELS`) |
 | `backend/tests/conftest.py`, `backend/tests/test_feature_api.py` | `backend/tests/`, `backend/tests/test_{{feature_snake}}_api.py` |
 | `frontend/config/env.ts`, `frontend/lib/{http,queryClient,forms}.ts` | `frontend/src/config/`, `frontend/src/lib/` |
 | `frontend/feature/types.ts` | `frontend/src/features/{{entities}}/types.ts` |
-| `frontend/feature/{api,keys,queries,mocks}.ts` | `frontend/src/features/{{entities}}/api/{{entities}}.{api,keys,queries,mocks}.ts` |
-| `frontend/agent/agent.stream.ts`, `frontend/agent/useAgentRun.ts` | `frontend/src/features/agent/api/`, `frontend/src/features/agent/hooks/` |
+| `frontend/feature/api.ts`, `frontend/feature/mocks.ts` | `frontend/src/features/{{entities}}/{{entities}}.api.ts`, `{{entities}}.mocks.ts` (mocks only if the project has tests) |
+| `frontend/chat/chat.api.ts`, `frontend/chat/useChat.ts` | `frontend/src/features/chat/` |
 | `project/Makefile`, `project/docker-compose.yml`, `project/vite.config.ts` | repo root, repo root, `frontend/` |
 | `project/pyproject.toml`, `project/env.example` | `backend/pyproject.toml`, `backend/.env.example` |
 | `project/package.scripts.json` | merge into `frontend/package.json` |
@@ -136,16 +142,18 @@ Create empty `__init__.py` files in each backend package. The domain columns in 
 ## Stack defaults (unless the project already chose otherwise)
 
 - **Backend:** tooling and code standards as in `python-architecture` when available. Python 3.12+, FastAPI, Pydantic v2, pydantic-settings, SQLAlchemy 2.x (async) + Alembic, `uv` for dependencies, Ruff + mypy (strict), pytest + pytest-asyncio + httpx.
-- **Contract:** OpenAPI 3.1 from FastAPI → `openapi-typescript` → `openapi-fetch`. Orval or `@hey-api/openapi-ts` are acceptable if the team prefers generated hooks, but keep hooks inside `features/<f>/api/`.
-- **Frontend:** as in `react-architecture` — Vite, TypeScript strict, TanStack Query, React Hook Form + Zod, Vitest + RTL + MSW.
+- **Contract:** OpenAPI 3.1 from FastAPI → `openapi-typescript` → `openapi-fetch`. Orval or `@hey-api/openapi-ts` are acceptable if the team prefers generated hooks, but keep the generated hooks inside the feature that uses them.
+- **Frontend:** as in `react-architecture` — Vite, TypeScript strict, TanStack Query, React Hook Form + Zod, and Vitest + RTL + MSW when the project has tests.
 - **Streaming:** `StreamingResponse` subclass with `text/event-stream` on the backend; `fetch` + `eventsource-parser` on the frontend.
 
 If the existing project diverges (Axios instead of openapi-fetch, snake_case JSON, sync SQLAlchemy), follow the project and briefly note where it differs from this skill. Don't migrate unprompted.
 
 ## How to respond
 
-- **New feature or endpoint:** start from `assets/templates/backend/feature/` and `frontend/feature/`; show the file tree for both sides first, then each file under a heading with its full path, in workflow order (schemas → service → router → tests → generated-types note → api/keys/queries → component usage). Remind the user to run `make api` between backend and frontend.
+- **New feature or endpoint:** start from `assets/templates/backend/feature/` and `frontend/feature/`; show the file tree for both sides first, then each file under a heading with its full path, in workflow order (schemas → service → router → tests → generated-types note → `<f>.api.ts` → component usage). Remind the user to run `make api` between backend and frontend.
 - **Scaffolding a project:** first load `python-architecture` and `react-architecture` if available (see Companion skills). Then start from `assets/templates/` and produce the full repo layout, `backend/app/main.py`, `core/config.py`, `core/errors.py`, `ApiModel`, one example feature end to end on both sides, `export_openapi.py`, `vite.config.ts` proxy, `lib/http.ts`, `Makefile`, `docker-compose.yml`, and the CI steps from `references/dev-setup.md`. Apply python-architecture's tooling to `backend/` and react-architecture's structure to `frontend/src`, then run `make check` in `backend/` and the frontend lint and type-check before handing back.
 - **Reviewing or debugging:** list contract violations first (hand-written types duplicating backend schemas, `fetch` in components, ORM objects returned, inconsistent error shapes, tokens in localStorage, wildcard CORS with credentials), then layering issues, then everything else, then the corrected code.
 - **Auth questions:** ask at most one question about deployment shape (same origin? external IdP? non-browser clients?) if it isn't clear from context, then recommend one option from the decision table and say why.
+- **Chat or streaming UI:** start from section 1 of `references/streaming.md` and the `backend/agent` + `frontend/chat` templates. Add tool-call events or resumable runs only if the user asks for them.
+- **Explaining to the user:** describe what changed and why in everyday words, the way you would to a colleague who doesn't know this stack. Explain a technical term in a short phrase the first time (for example "SSE, a way for the server to send text to the browser bit by bit") or leave it out. Name standards such as RFC 9457 only when the user needs to look them up.
 - Keep explanations short; let the code and structure carry the message.

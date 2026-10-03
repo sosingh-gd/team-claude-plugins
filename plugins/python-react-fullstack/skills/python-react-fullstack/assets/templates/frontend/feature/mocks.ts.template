@@ -1,7 +1,7 @@
-// features/{{entities}}/api/{{entities}}.mocks.ts — MSW handlers typed from the generated schema,
+// features/{{entities}}/{{entities}}.mocks.ts — MSW handlers typed from the generated schema,
 // so a backend change breaks the mocks at compile time instead of silently passing tests.
 import { http, HttpResponse } from 'msw';
-import type { {{Entity}} } from '../types';
+import type { {{Entity}} } from './types';
 
 export const {{entity}}Fixture: {{Entity}} = {
   id: '00000000-0000-4000-8000-000000000001',

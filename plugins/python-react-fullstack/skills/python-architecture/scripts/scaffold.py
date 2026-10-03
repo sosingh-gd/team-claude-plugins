@@ -125,6 +125,24 @@ def render(text: str, ctx: dict[str, str]) -> str:
     return text
 
 
+LIGHT_LINT = '''select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "UP",       # pyupgrade
+    "B",        # flake8-bugbear
+    "SIM",      # flake8-simplify
+    "RUF",      # ruff-specific{async_rule}
+]'''
+
+
+def use_light_lint(pyproject: str, *, fastapi: bool) -> str:
+    """Swap the strict ruff rule set for the light preset (see references/tooling.md)."""
+    async_rule = '\n    "ASYNC",    # blocking calls in async def' if fastapi else ""
+    light = LIGHT_LINT.format(async_rule=async_rule)
+    return re.sub(r"(?ms)^\[tool\.ruff\.lint\]\nselect = \[.*?^\]", "[tool.ruff.lint]\n" + light, pyproject, count=1)
+
+
 def write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
@@ -150,6 +168,12 @@ def main() -> int:
     parser.add_argument("--type", choices=["fastapi", "library", "cli"], default="fastapi")
     parser.add_argument("--layout", choices=["modular", "layered"], default="modular", help="FastAPI only")
     parser.add_argument("--python", default="3.12", help="Python version, e.g. 3.12")
+    parser.add_argument(
+        "--lint",
+        choices=["strict", "light"],
+        default="strict",
+        help="Ruff rule set: strict (default) or light for small/learning projects",
+    )
     parser.add_argument("--dest", help="Target directory (default: ./<name>)")
     parser.add_argument("--force", action="store_true", help="Write into a non-empty directory")
     parser.add_argument("--no-sync", action="store_true", help="Skip `uv sync` (lock + install)")
@@ -184,7 +208,10 @@ def main() -> int:
     if ptype == "fastapi":
         files |= {"Dockerfile": "Dockerfile", "dockerignore": ".dockerignore", "env.example": ".env.example"}
     for src_name, dest_name in files.items():
-        write(dest / dest_name, render((TEMPLATES / src_name).read_text(encoding="utf-8"), ctx))
+        content = render((TEMPLATES / src_name).read_text(encoding="utf-8"), ctx)
+        if dest_name == "pyproject.toml" and args.lint == "light":
+            content = use_light_lint(content, fastapi=ptype == "fastapi")
+        write(dest / dest_name, content)
 
     write(dest / ".python-version", args.python + "\n")
     readme_ctx = ctx | {"layout_notes": render(LAYOUT_NOTES.get(args.layout, ""), ctx)}

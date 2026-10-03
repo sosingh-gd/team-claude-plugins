@@ -1,4 +1,4 @@
 // Public API of the {{feature}} feature. Only export what pages/app need.
 export { {{FeatureComponent}} } from './components/{{FeatureComponent}}';
-export { use{{Entity}}Query } from './api/{{entity}}.queries';
+export { use{{Entity}}Query } from './{{feature}}.api';
 export type { {{Entity}} } from './types';

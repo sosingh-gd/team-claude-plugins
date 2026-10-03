@@ -17,28 +17,31 @@ Atomic levels inside `components/`: `atoms ← molecules ← organisms ← templ
 
 ## Feature module anatomy
 
+Start small:
+
 ```
 features/orders/
 ├── components/
-│   ├── OrdersTable/          # composes <DataTable/> organism with order columns
-│   └── OrderStatusBadge/     # composes <Badge/> atom
-├── hooks/
-│   └── useOrderFilters.ts
-├── api/
-│   ├── orders.api.ts         # raw requests using lib/http
-│   ├── orders.queries.ts     # useOrdersQuery, useCreateOrderMutation
-│   └── orders.keys.ts        # query key factory
-├── store/                    # only if client state is needed
+│   ├── OrdersTable.tsx       # composes <DataTable/> organism with order columns; props inline
+│   └── OrderStatusBadge.tsx  # composes <Badge/> atom
+├── orders.api.ts             # server calls, query keys, query hooks
+├── useOrderFilters.ts        # the screen's hook, if it needs one
 ├── types.ts                  # Order, OrderStatus (or schemas.ts with Zod)
-├── utils.ts
 └── index.ts
 ```
+
+Grow only when a piece gets long or crowded:
+
+- `orders.api.ts` past ~150 lines → `api/orders.api.ts` (calls), `api/orders.keys.ts` (query keys), `api/orders.queries.ts` (hooks).
+- Several hooks → `hooks/`.
+- Real client state shared across the feature's components → `store/`.
+- Pure helpers → `utils.ts`.
 
 `index.ts` exposes only what pages need:
 
 ```ts
 export { OrdersTable } from './components/OrdersTable';
-export { useOrdersQuery } from './api/orders.queries';
+export { useOrdersQuery } from './orders.api';
 export type { Order, OrderStatus } from './types';
 ```
 
@@ -54,9 +57,7 @@ Removing a feature = delete its folder + remove its usages in pages/router. If r
 
 ```
 pages/
-└── OrdersPage/
-    ├── OrdersPage.tsx
-    └── index.ts
+└── OrdersPage.tsx       # large projects may use OrdersPage/OrdersPage.tsx + index.ts
 ```
 
 ```tsx
@@ -70,9 +71,11 @@ export function OrdersPage() {
 }
 ```
 
+When a screen must start fresh for a different item, the page sets a `key`: `<OrderScreen key={orderId} orderId={orderId} />`. React then remounts the screen, so no code is needed to reset its state.
+
 ## Enforcing boundaries with ESLint
 
-Use `eslint-plugin-boundaries` (flat config):
+Recommended for large projects; optional for small ones, where code review is usually enough. Use `eslint-plugin-boundaries` (flat config):
 
 ```js
 // eslint.config.js (excerpt)

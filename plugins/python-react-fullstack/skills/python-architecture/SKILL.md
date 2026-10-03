@@ -7,6 +7,8 @@ description: Standards and scaffolding for Python projects using uv for environm
 
 This skill encodes a house standard for Python projects. The goal is that every project looks and behaves the same way: `uv` owns the environment, `pyproject.toml` owns all configuration, and `make` is the one command surface humans, CI and Claude all use. Consistency matters more than any individual choice, because it lets anyone (including you, later) clone a repo and know immediately how to install, run, test and lint it.
 
+**The project's own rules come first.** Read the project's `CLAUDE.md` before applying this skill. If it says to keep things simple, favor readable code over abstractions, skip tests, or relax linting, follow it: use the light lint preset, skip or trim the test suite, and keep the structure small. The defaults below are for teams that haven't decided, not rules that override the project.
+
 ## Core conventions
 
 **uv manages everything.** Python version, virtualenv, dependencies and lockfile all go through uv. Never use `pip install`, `requirements.txt`, Poetry or manual venvs in a project that follows this standard. The commands you need:
@@ -39,6 +41,7 @@ Commit `uv.lock` and `.python-version`. They are what make builds reproducible.
    python <skill-dir>/scripts/scaffold.py --name my-service --type fastapi --dest ./my-service
    # installed as a Claude Code plugin, <skill-dir> is ${CLAUDE_PLUGIN_ROOT}/skills/python-architecture
    # options: --type fastapi|library|cli  --python 3.12  --layout modular|layered (fastapi only)
+   #          --lint strict|light (light for small or learning projects, or when CLAUDE.md asks for simplicity)
    ```
 
    It writes `pyproject.toml`, `Makefile`, `.python-version`, `.gitignore`, `.pre-commit-config.yaml`, `.env.example` (services), `Dockerfile` (services), a GitHub Actions workflow, a README, a working package skeleton and passing tests. Placeholder text in templates is `{{project_name}}`, `{{package_name}}`, `{{python_version}}`, `{{python_short}}`.
@@ -47,7 +50,7 @@ Commit `uv.lock` and `.python-version`. They are what make builds reproducible.
 
 4. **Verify**: run `make check`. A fresh scaffold must pass cleanly. Do not hand back a project where `make check` fails, because the first thing the user will do is run it.
 
-5. **Explain briefly** what was created and the 4–5 make targets they will use most. Don't walk through every file.
+5. **Explain briefly, in plain words,** what was created and the 4–5 make targets they will use most. Don't walk through every file. Explain a tool or term in a short phrase the first time (for example "ruff, the linter and formatter"), or leave it out.
 
 If the environment has no uv and you cannot install it, still generate the files, and tell the user to run `make install` locally.
 
@@ -63,7 +66,7 @@ Respect what's there before imposing the standard. Look for `pyproject.toml`, `M
 
 Pick the lightest structure that fits the expected size, and say why:
 
-- **FastAPI service**: read `references/fastapi.md`. Default to the **modular (domain-based)** layout with a thin router → service → repository split inside each module. Use **layered** only for very small services (a few endpoints, one domain). Use **clean/hexagonal** only when business rules are complex and must be testable without infrastructure, since it adds real mapping boilerplate.
+- **FastAPI service**: read `references/fastapi.md`. Default to the **modular (domain-based)** layout with a thin router → service → repository split inside each module. In a small module, wire the service dependency at the top of `router.py`; add a separate `dependencies.py` only when other modules need it. Use **layered** only for very small services (a few endpoints, one domain). Use **clean/hexagonal** only when business rules are complex and must be testable without infrastructure, since it adds real mapping boilerplate.
 - **Library, CLI, worker, data/ML project**: read `references/project-types.md`.
 
 ## Code standards that apply to every project
@@ -74,7 +77,7 @@ These are the defaults that keep code maintainable as it grows. Explain them to 
 - **Configuration through `pydantic-settings`**, loaded from environment variables and an optional `.env`, exposed via a cached `get_settings()`. No hardcoded secrets, no scattered `os.getenv` calls. Commit `.env.example`, never `.env`.
 - **Logging, not print.** Use the `logging` module with one configuration point at startup (structured JSON in production is a good default for services). Ruff's `T20` rule enforces no stray prints.
 - **Explicit errors.** Define domain exceptions per module; translate them to HTTP/exit codes at the edge, not deep inside business logic.
-- **Tests mirror the source tree** under `tests/`, use pytest fixtures, and run against real infrastructure where behavior matters (e.g. Testcontainers Postgres instead of SQLite). Aim for meaningful coverage of business logic rather than a number; the template sets a modest `fail_under` the user can raise.
+- **Tests mirror the source tree** (unless the project says to skip tests) under `tests/`, use pytest fixtures, and run against real infrastructure where behavior matters (e.g. Testcontainers Postgres instead of SQLite). Aim for meaningful coverage of business logic rather than a number; the template sets a modest `fail_under` the user can raise.
 - **Pure functions where possible**, side effects at the edges. This is what makes code easy to test and to reuse from CLIs, workers and APIs alike.
 
 ## Before you finish
@@ -82,6 +85,7 @@ These are the defaults that keep code maintainable as it grows. Explain them to 
 Run through this list for any project you create or substantially change:
 
 - `make check` passes (format check, lint, typecheck, tests).
+- No `# noqa` comments added just to quiet a rule. If a rule keeps forcing them in this project, drop the rule from `select` (or use the light preset) and say so.
 - `uv.lock` exists and is up to date (`uv lock --check`).
 - No secrets or `.env` committed; `.env.example` documents every setting.
 - README states how to install and run in three commands or fewer (`make install`, `make run`, `make test`).

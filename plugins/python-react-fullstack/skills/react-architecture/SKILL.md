@@ -1,11 +1,28 @@
 ---
 name: react-architecture
-description: Folder structure, architecture rules and coding standards for React + TypeScript + Vite single-page apps, using a hybrid layout where atomic-design UI components (atoms, molecules, organisms, templates) live in shared type-based folders and business logic lives in self-contained feature modules. The design system is wrapped behind atoms so it can be swapped. Use this skill whenever the user writes, scaffolds, refactors, reviews or asks where to put React code — components, hooks, pages, features, API calls, state, tests, or project setup — even if they only paste a .tsx/.jsx file or mention JSX, hooks, Vite, or a component name without asking about structure.
+description: Folder structure, architecture rules and coding standards for React + TypeScript + Vite single-page apps, using a hybrid layout where atomic-design UI components (atoms, molecules, organisms, templates) live in shared type-based folders and business logic lives in self-contained feature modules. The design system is wrapped behind atoms so it can be swapped. Scales down for small projects. Use this skill whenever the user writes, scaffolds, refactors, reviews or asks where to put React code — components, hooks, pages, features, API calls, state, tests, or project setup — even if they only paste a .tsx/.jsx file or mention JSX, hooks, Vite, or a component name without asking about structure.
 ---
 
 # React Architecture (Vite + TypeScript, plug-and-play)
 
-The goal of this architecture is **plug-and-play**: any piece (a design system, a feature, an API client) should be replaceable by touching one well-defined place. Every rule below serves that goal — when a situation isn't covered, choose the option that keeps the swap surface smallest.
+The goal of this architecture is **plug-and-play**: any piece (a design system, a feature, an API client) should be replaceable by touching one well-defined place. When a situation isn't covered, choose the option that keeps the swap surface smallest **and** the code easiest to read. If those two pull in different directions on a small project, readability wins.
+
+## Before anything else
+
+**The project's own rules come first.** Read the project's `CLAUDE.md` before applying this skill. If it says to keep things simple, favor readable code over abstractions, skip tests, or use fewer files, follow it. The structure and defaults below are a starting point for teams that haven't decided, not rules that override the project.
+
+**Small or large project?** Decide once, from the project's size and the `CLAUDE.md`, and say which you chose in one line.
+
+| | Small (default for learning projects, prototypes, one or two developers, under ~10 screens) | Large (several developers or teams, long-lived product) |
+|---|---|---|
+| Shared components | One file each (`components/atoms/Button.tsx`), props interface inline | Folder per component (`Button/Button.tsx`, `Button.types.ts`, `index.ts`) |
+| Barrel files | None except each feature's `index.ts`; import from the file path | `index.ts` per component and per atomic level |
+| Atoms | Only for design-system primitives the app actually uses | Full design-system wrapper set |
+| Feature API | One `<feature>.api.ts` | Split into `api/` (calls, keys, hooks) when a file passes ~150 lines |
+| ESLint boundary rules | Optional | Recommended |
+| Tests | Only if the project wants them | Vitest + Testing Library + MSW |
+
+Everything else (the layers, the import direction, sealed features, atoms as the only design-system importers) applies to both.
 
 ## The layout at a glance
 
@@ -15,12 +32,10 @@ src/
 ├── pages/               # Route-level screens. Thin: compose features + templates
 ├── features/            # Self-contained business modules (plug-and-play units)
 │   └── <feature>/
-│       ├── components/  # Feature-specific components (compose shared UI)
-│       ├── hooks/
-│       ├── api/         # Requests + query hooks for this feature
-│       ├── store/       # Feature client state (only if needed)
+│       ├── components/  # Feature components: one file each, props inline
+│       ├── <feature>.api.ts  # Server calls, query keys and query hooks
+│       ├── use<Feature>.ts   # The screen's hook, if it needs one
 │       ├── types.ts
-│       ├── utils.ts
 │       └── index.ts     # PUBLIC API — the only file others may import
 ├── components/          # Shared, business-agnostic UI (atomic design)
 │   ├── atoms/           # ONLY layer allowed to import the design-system library
@@ -29,15 +44,15 @@ src/
 │   └── templates/       # Page layouts with slots, no data
 ├── hooks/               # Shared, generic hooks (useDebounce, useMediaQuery)
 ├── lib/                 # Configured third-party clients (http, queryClient)
-├── services/            # Cross-feature API clients, if any
 ├── config/              # env parsing, constants, route paths
 ├── styles/              # tokens.css / theme, global styles
-├── types/               # Truly global types
 ├── utils/               # Pure helper functions
 └── main.tsx
 ```
 
-Read `references/structure-and-boundaries.md` for the full rules on what goes where and the import-direction rules (including an ESLint config that enforces them).
+Add folders only when there is something to put in them: `features/<f>/hooks/` once a feature has several hooks, `store/` only for real client state, `services/` and `types/` only when more than one feature needs them. Empty or one-file folders are noise.
+
+Read `references/structure-and-boundaries.md` for what goes where and the import-direction rules (including an optional ESLint config that enforces them).
 
 ## The five rules that matter most
 
@@ -47,10 +62,19 @@ Read `references/structure-and-boundaries.md` for the full rules on what goes wh
 4. **Shared components are business-agnostic.** A `DataTable` organism takes columns + rows + callbacks; it never knows what a "User" or "Order" is. Anything that knows the domain belongs in a feature.
 5. **Pages are thin.** A page reads route params, picks a template, and drops feature components into slots. No data fetching logic or heavy JSX in pages.
 
+## Keep it plain
+
+These rules stop the code from getting clever. They matter as much as the structure.
+
+- **Reset a screen's state with a `key`.** When a screen must start fresh for a new item (another conversation, another order), the page renders `<OrderScreen key={orderId} … />`. Don't write effects or custom hooks that watch an id and reset state.
+- **Aim for one hook per screen.** A screen usually needs one `useXxx` hook that returns everything it uses. Hooks calling hooks calling hooks are hard to follow; inline small pieces instead of extracting them.
+- **If a pattern needs a comment to explain how it works, choose a plainer one.** Comments should say *why*, not decode *how*. Ref-juggling tricks, "latest callback" refs, generic state helpers and similar patterns are a sign to step back.
+- **Fewer files beats more files** until a file is genuinely long (~150 lines). Don't create a file just to hold one type or re-export one thing.
+
 ## Where does this file go? (decision order)
 
 1. Does it know about a business concept (user, invoice, cart)? → `features/<feature>/…`
-2. Is it reusable UI with no business knowledge? → `components/<atomic level>/`
+2. Is it reusable UI with no business knowledge, used in more than one feature? → `components/<atomic level>/`
    - Wraps a single design-system primitive → atom
    - Small combination of atoms with one purpose (SearchField = Input + Icon + Button) → molecule
    - Larger self-sufficient section (DataTable, Navbar, Modal with header/footer) → organism
@@ -59,40 +83,54 @@ Read `references/structure-and-boundaries.md` for the full rules on what goes wh
 4. Is it a configured third-party client? → `lib/`
 5. Pure function? → `utils/`
 
+UI used by only one feature stays in that feature's `components/` until a second feature needs it.
+
 If the user's existing project already follows a different convention, follow theirs for consistency and mention (briefly) where it diverges from this skill.
 
-## Component folder convention
+## Component files
 
-Every component — shared or feature — gets its own folder:
+**Feature components** (in `features/<f>/components/`) are one file each, with the props interface at the top of the same file:
+
+```tsx
+// features/orders/components/OrderRow.tsx
+interface OrderRowProps {
+  order: Order;
+  onSelect: (id: string) => void;
+}
+
+export function OrderRow({ order, onSelect }: OrderRowProps) { … }
+```
+
+**Shared components** (in `components/`) follow the small/large table above. In a large project each gets a folder:
 
 ```
 DataTable/
 ├── DataTable.tsx          # the component (named export)
 ├── DataTable.types.ts     # props + public types
-├── DataTable.test.tsx     # Vitest + React Testing Library
-├── DataTable.stories.tsx  # optional, if Storybook is used
+├── DataTable.test.tsx     # if the project has tests
 └── index.ts               # export { DataTable } from './DataTable'; export type * from './DataTable.types'
 ```
 
-Each atomic level also has an `index.ts` barrel so consumers write `import { Button, DataTable } from '@/components'`. Templates for these files: `assets/templates/`.
+Templates: `assets/templates/` (`FeatureComponent.tsx` for feature components; the `Component.*` and `component-index` files for large-project shared components).
 
 ## Stack defaults (use unless the project already chose otherwise)
 
 - **Build/lang:** Vite, TypeScript `strict: true`, path alias `@/` → `src/`
 - **Routing:** React Router (route paths centralized in `config/routes.ts`), lazy-load pages with `React.lazy`
-- **Server state:** TanStack Query; query hooks live in `features/<f>/api/`
-- **Client state:** local `useState`/`useReducer` first; React Context for low-frequency app-wide values (theme, auth session); Zustand only when real shared client state exists
+- **Server state:** TanStack Query; query hooks live in the feature's `<feature>.api.ts`
+- **Client state:** local `useState` first; React Context for low-frequency app-wide values (theme, auth session); Zustand only when real shared client state exists
 - **Forms:** React Hook Form + Zod schemas (schemas double as types via `z.infer`)
-- **Testing:** Vitest + React Testing Library + MSW for API mocking
-- **Lint/format:** ESLint (with boundary rules) + Prettier
+- **Testing (when the project has tests):** Vitest + React Testing Library + MSW for API mocking
+- **Lint/format:** ESLint + Prettier; boundary rules for large projects
 
 ## Coding standards
 
-Read `references/coding-standards.md` when writing or reviewing component code. Short version: function components with named exports, explicit props types, no `any`, no business logic in JSX, derive state instead of syncing it, custom hooks for reusable logic, colocated tests, accessible markup.
+Read `references/coding-standards.md` when writing or reviewing component code. Short version: function components with named exports, explicit props types, no `any`, no business logic in JSX, derive state instead of syncing it, reset with `key`, one hook per screen, plain patterns over clever ones, accessible markup.
 
 ## How to respond
 
-- When **creating** code: show the file tree for what you're adding first, then each file with its full path as a heading. Include the `index.ts` barrel updates.
-- When **scaffolding a new project**: produce the full `src/` tree, `vite.config.ts` and `tsconfig` alias config, the ESLint boundary config, and one example feature end-to-end.
-- When **reviewing/refactoring**: list boundary violations first (wrong-direction imports, vendor imports outside atoms, domain logic in shared components), then other issues, then the corrected structure.
+- When **creating** code: show the file tree for what you're adding first, then each file with its full path as a heading. Include barrel updates only if the project uses barrels.
+- When **scaffolding a new project**: say whether you're using the small or large setup and why. Produce the `src/` tree, `vite.config.ts` and `tsconfig` alias config, and one example feature end-to-end. Add the ESLint boundary config for large projects.
+- When **reviewing/refactoring**: list boundary violations first (wrong-direction imports, vendor imports outside atoms, domain logic in shared components), then readability issues (needless files, hook chains, clever patterns), then the rest, then the corrected structure.
+- When **explaining to the user**: describe what changed and why in everyday words. Explain a technical term in a short phrase the first time you use it, or leave it out.
 - Keep explanations short; the structure should speak for itself.

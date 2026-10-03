@@ -1,34 +1,54 @@
 import uuid
 from collections.abc import AsyncIterator
 
+from app.core.errors import NotFoundError
 from app.core.schemas import ApiModel
 
-from .events import RunCompletedEvent, RunStartedEvent, TextDeltaEvent
-from .schemas import AgentRunRequest
+from .events import RunCompletedEvent, TextDeltaEvent
+from .schemas import ConversationRead, MessageRead
 
 
 class AgentService:
-    """Adapter between your LLM SDK / agent framework and the AgentEvent contract.
+    """Creates conversations and streams the assistant's replies into them.
 
-    Map provider-native events to contract events here, so the frontend never changes
-    when the provider does. Use session_factory() for short DB writes; don't hold a
-    request-scoped session for the whole stream.
+    TODO: conversations are kept in memory so the template runs as is. Store them with a
+    repository + models (like the feature templates) before going beyond a demo. Use
+    session_factory() for short DB writes; don't hold a request-scoped session for the whole stream.
     """
 
-    async def run(self, req: AgentRunRequest) -> AsyncIterator[ApiModel]:
-        run_id = str(uuid.uuid4())
-        yield RunStartedEvent(run_id=run_id)
+    def __init__(self) -> None:
+        self._conversations: dict[str, ConversationRead] = {}
 
-        # TODO: replace this echo with the provider stream, e.g.
+    def create_conversation(self) -> ConversationRead:
+        conversation = ConversationRead(id=str(uuid.uuid4()), messages=[])
+        self._conversations[conversation.id] = conversation
+        return conversation
+
+    def get_conversation(self, conversation_id: str) -> ConversationRead:
+        conversation = self._conversations.get(conversation_id)
+        if conversation is None:
+            raise NotFoundError(f"Conversation {conversation_id} not found")
+        return conversation
+
+    async def reply(self, conversation_id: str, content: str) -> AsyncIterator[ApiModel]:
+        conversation = self.get_conversation(conversation_id)
+        conversation.messages.append(MessageRead(id=str(uuid.uuid4()), role="user", content=content))
+
+        # TODO: replace this echo with your LLM SDK, turning its chunks into TextDeltaEvents:
         #   async for chunk in llm.stream(messages=...):
-        #       if chunk is text:      yield TextDeltaEvent(text=chunk.text)
-        #       if chunk is tool call: yield ToolCallEvent(...); run tool; yield ToolResultEvent(...)
-        for word in f"You said: {req.messages[-1].content}".split(" "):
+        #       yield TextDeltaEvent(text=chunk.text)
+        reply = ""
+        for word in f"You said: {content}".split(" "):
+            reply += word + " "
             yield TextDeltaEvent(text=word + " ")
 
-        message_id = str(uuid.uuid4())  # TODO: persist the final assistant message, return its id
-        yield RunCompletedEvent(message_id=message_id)
+        message = MessageRead(id=str(uuid.uuid4()), role="assistant", content=reply)
+        conversation.messages.append(message)
+        yield RunCompletedEvent(message_id=message.id)
+
+
+_service = AgentService()  # one shared instance while conversations live in memory
 
 
 def get_agent_service() -> AgentService:
-    return AgentService()
+    return _service

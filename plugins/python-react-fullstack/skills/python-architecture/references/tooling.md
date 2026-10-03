@@ -45,6 +45,19 @@ Rule sets selected and what they buy:
 | FAST | FastAPI | Redundant `response_model`, non-Annotated dependencies (FastAPI templates) |
 | RUF | ruff | Misc correctness, e.g. mutable class defaults |
 
+### Light preset (small or learning projects)
+
+The full rule set above suits team codebases. For small projects, prototypes, learning apps, or when the project's `CLAUDE.md` asks for simplicity, use the light preset (`scaffold.py --lint light`, or edit `select` by hand):
+
+```toml
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "ASYNC"]   # ASYNC for FastAPI services
+```
+
+It keeps the rules that catch real bugs and keep imports tidy, and drops the ones that mostly produce `# noqa` noise in small code (`S`, `ARG`, `ERA`, `T20`, `FAST`, `PTH`, `N`, `RET`, `C4`, `PT`). Rules can be added back one at a time as the project grows.
+
+**Avoid `# noqa` clutter.** A `# noqa` should be rare and carry a reason. If the same rule needs several of them, the rule doesn't fit the project: remove it from `select` instead.
+
 Common optional additions: `D` (pydocstyle, with `convention = "google"`) for published libraries; `PL` (pylint) for teams that want stricter complexity limits; `TCH` to move type-only imports under `TYPE_CHECKING`; `DTZ` to forbid naive datetimes in services that handle time zones.
 
 Per-file ignores: tests allow `assert` (`S101`), unused fixture args (`ARG`) and dummy secrets (`S105/S106`). Prefer narrow per-file ignores or inline `# noqa: CODE` with a reason over removing a rule globally.

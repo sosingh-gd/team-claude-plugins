@@ -5,11 +5,16 @@ from pydantic import Field
 from app.core.schemas import ApiModel
 
 
-class ChatMessage(ApiModel):
+class MessageRead(ApiModel):
+    id: str
     role: Literal["user", "assistant"]
+    content: str
+
+
+class ConversationRead(ApiModel):
+    id: str
+    messages: list[MessageRead]
+
+
+class SendMessageRequest(ApiModel):
     content: str = Field(min_length=1, max_length=50_000)
-
-
-class AgentRunRequest(ApiModel):
-    conversation_id: str | None = None
-    messages: list[ChatMessage] = Field(min_length=1)

@@ -1,0 +1,64 @@
+// features/chat/useChat.ts — the one hook a chat screen needs.
+// The streamed reply is written straight into the cached conversation, so there is a single
+// list of messages. When the reply ends, the conversation is refetched from the server.
+import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { conversationKey, streamReply, useConversationQuery, type Conversation } from './chat.api';
+
+export function useChat(conversationId: string) {
+  const queryClient = useQueryClient();
+  const conversation = useConversationQuery(conversationId);
+  const [isReplying, setIsReplying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => abortRef.current?.abort(), []); // stop streaming when the screen closes
+
+  async function send(content: string) {
+    const key = conversationKey(conversationId);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setError(null);
+    setIsReplying(true);
+
+    // Show the user's message and an empty reply right away; the stream fills the reply in.
+    await queryClient.cancelQueries({ queryKey: key });
+    queryClient.setQueryData<Conversation>(key, (old) =>
+      old && {
+        ...old,
+        messages: [
+          ...old.messages,
+          { id: 'pending-user', role: 'user', content },
+          { id: 'pending-reply', role: 'assistant', content: '' },
+        ],
+      },
+    );
+
+    try {
+      await streamReply(conversationId, content, {
+        signal: controller.signal,
+        onText: (text) =>
+          queryClient.setQueryData<Conversation>(key, (old) =>
+            old && {
+              ...old,
+              messages: old.messages.map((m) => (m.id === 'pending-reply' ? { ...m, content: m.content + text } : m)),
+            },
+          ),
+      });
+    } catch (err) {
+      if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setIsReplying(false);
+      void queryClient.invalidateQueries({ queryKey: key }); // swap the pending messages for the saved ones
+    }
+  }
+
+  return {
+    messages: conversation.data?.messages ?? [],
+    isLoading: conversation.isLoading,
+    isReplying,
+    error,
+    send,
+    stop: () => abortRef.current?.abort(),
+  };
+}

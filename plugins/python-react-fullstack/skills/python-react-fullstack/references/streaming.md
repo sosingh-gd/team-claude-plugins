@@ -1,71 +1,205 @@
-# Streaming: SSE for Agents and LLMs, WebSockets When Needed
+# Streaming: SSE for Chat and Agents, WebSockets When Needed
 
 ## Contents
-1. Choosing a transport
-2. Typed event contract
-3. Backend: SSE endpoint
-4. Heartbeats, disconnects, and resources
-5. Frontend: fetch-based SSE client
-6. Frontend: `useAgentRun` hook
-7. Reconnect and resume
+1. Start here: the simplest working chat
+2. Choosing a transport
+3. Typed event contract
+4. Backend: the SSE response
+5. Heartbeats, disconnects, and resources
+6. Optional: tool calls and agent steps
+7. Optional: reconnect and resume long runs
 8. Infrastructure gotchas
 9. WebSockets
 
-## 1. Choosing a transport
+Sections 1–5 are what a chat screen needs. Sections 6 and 7 are **optional**: add them only when the UI really shows tool calls, or runs last long enough that a page refresh must reattach to them.
+
+## 1. Start here: the simplest working chat
+
+Three defaults keep chat code small. Follow them unless the project has a concrete reason not to.
+
+1. **Create the conversation first, then stream into it.** `POST /conversations` returns the new conversation's id. Only then does the frontend call `POST /conversations/{id}/messages/stream`. The frontend always knows which conversation it is in, so it never has to change the URL halfway through a stream or check whether a stream still belongs to the current screen.
+2. **Write the streamed text into the cached conversation.** The conversation is a normal TanStack Query query. While the reply streams, append each piece of text to the last message in that cached data; when the reply ends, refetch. There is one list of messages, not a server copy plus a streaming copy to merge.
+3. **The stream function takes `onText`, resolves when done, and throws on failure.** The caller needs one `try/catch`, not an event handler spread across a hook.
+
+The templates `backend/agent/*` and `frontend/chat/*` implement exactly this, and work end to end as is (the backend echoes the message back until you plug in an LLM).
+
+### Backend
+
+```python
+# app/features/agent/router.py (shape; full version in the template)
+router = APIRouter(prefix="/conversations", tags=["conversations"])
+
+
+@router.post("", response_model=ConversationRead, status_code=status.HTTP_201_CREATED)
+async def create_conversation(agent: AgentServiceDep) -> ConversationRead:
+    return agent.create_conversation()
+
+
+@router.get("/{conversation_id}", response_model=ConversationRead)
+async def get_conversation(conversation_id: str, agent: AgentServiceDep) -> ConversationRead:
+    return agent.get_conversation(conversation_id)
+
+
+@router.post("/{conversation_id}/messages/stream", response_class=EventStreamResponse, responses=...)
+async def stream_reply(conversation_id: str, body: SendMessageRequest, request: Request, agent: AgentServiceDep):
+    agent.get_conversation(conversation_id)       # 404 as normal Problem Details, before streaming starts
+    async def events():
+        async for item in with_heartbeat(agent.reply(conversation_id, body.content), interval=15):
+            if await request.is_disconnected():
+                break
+            yield item if isinstance(item, str) else format_sse(item)
+        # the template also catches errors and sends run_failed (section 4)
+    return EventStreamResponse(events())
+```
+
+```python
+# app/features/agent/service.py (shape)
+async def reply(self, conversation_id: str, content: str) -> AsyncIterator[ApiModel]:
+    save the user message
+    async for chunk in llm.stream(...):           # your LLM SDK
+        yield TextDeltaEvent(text=chunk.text)
+    save the assistant message
+    yield RunCompletedEvent(message_id=message.id)
+```
+
+The service saves both messages, so refetching the conversation after the stream returns the real, saved versions.
+
+### Frontend: the stream function
+
+```ts
+// features/chat/chat.api.ts (excerpt)
+export async function streamReply(
+  conversationId: string,
+  content: string,
+  { signal, onText }: { signal: AbortSignal; onText: (text: string) => void },
+): Promise<void> {
+  const res = await fetch(`${env.apiBaseUrl}/api/v1/conversations/${conversationId}/messages/stream`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...authHeaders('POST') },
+    body: JSON.stringify({ content }),
+    signal,
+  });
+  if (!res.ok || !res.body) throw await ApiError.fromResponse(res);
+
+  let completed = false;
+  let failure: string | undefined;
+  const parser = createParser({
+    onEvent(msg) {
+      const event = JSON.parse(msg.data) as AgentEvent;
+      if (event.type === 'text_delta') onText(event.text);
+      if (event.type === 'run_completed') completed = true;
+      if (event.type === 'run_failed') failure = event.message;
+    },
+  });
+
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    parser.feed(value);
+  }
+  if (failure) throw new Error(failure);
+  if (!completed && !signal.aborted) throw new Error('The connection dropped before the reply finished');
+}
+```
+
+It uses `fetch` rather than `EventSource` because `EventSource` can't send a POST body. It bypasses openapi-fetch, so it adds `authHeaders()` from `lib/http.ts` itself.
+
+### Frontend: one hook for the screen
+
+```ts
+// features/chat/useChat.ts
+export function useChat(conversationId: string) {
+  const queryClient = useQueryClient();
+  const conversation = useConversationQuery(conversationId);
+  const [isReplying, setIsReplying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => abortRef.current?.abort(), []); // stop streaming when the screen closes
+
+  async function send(content: string) {
+    const key = conversationKey(conversationId);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setError(null);
+    setIsReplying(true);
+
+    // Show the user's message and an empty reply right away; the stream fills the reply in.
+    await queryClient.cancelQueries({ queryKey: key });
+    queryClient.setQueryData<Conversation>(key, (old) =>
+      old && { ...old, messages: [...old.messages,
+        { id: 'pending-user', role: 'user', content },
+        { id: 'pending-reply', role: 'assistant', content: '' }] },
+    );
+
+    try {
+      await streamReply(conversationId, content, {
+        signal: controller.signal,
+        onText: (text) =>
+          queryClient.setQueryData<Conversation>(key, (old) =>
+            old && { ...old, messages: old.messages.map((m) =>
+              m.id === 'pending-reply' ? { ...m, content: m.content + text } : m) },
+          ),
+      });
+    } catch (err) {
+      if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setIsReplying(false);
+      void queryClient.invalidateQueries({ queryKey: key }); // swap the pending messages for the saved ones
+    }
+  }
+
+  return { messages: conversation.data?.messages ?? [], isLoading: conversation.isLoading,
+           isReplying, error, send, stop: () => abortRef.current?.abort() };
+}
+```
+
+### Frontend: the screen
+
+```tsx
+// "New chat" creates the conversation, then navigates to it.
+const createConversation = useCreateConversationMutation();
+const startChat = () => createConversation.mutate(undefined, { onSuccess: (c) => navigate(`/chat/${c.id}`) });
+
+// The page gives the screen a key, so switching conversations starts with fresh state.
+export function ChatPage() {
+  const { conversationId = '' } = useParams();
+  return <ChatScreen key={conversationId} conversationId={conversationId} />;
+}
+
+function ChatScreen({ conversationId }: { conversationId: string }) {
+  const { messages, isReplying, error, send, stop } = useChat(conversationId);
+  // render messages, a composer that calls send(text), a Stop button while isReplying, and error
+}
+```
+
+That is the whole feature: `chat.api.ts`, `useChat.ts` and the components. Render model output with a sanitizing Markdown renderer; never `dangerouslySetInnerHTML`. If very fast streams make the UI stutter, collect text in a ref and write it to the cache once per animation frame, but only after you see the problem.
+
+## 2. Choosing a transport
 
 | Need | Use |
 |---|---|
-| Server → client stream started by a request (LLM tokens, agent steps, tool calls, progress) | **SSE over `fetch` POST** |
+| Server → client stream started by a request (chat replies, agent steps, progress) | **SSE over `fetch` POST** (section 1) |
 | Server → client notifications on a long-lived channel (job finished, new message) with cookie auth | SSE via `EventSource` GET (auto-reconnect built in) |
 | Status of a job that takes minutes | Polling with TanStack Query `refetchInterval` (other-patterns.md) — simplest, cache-friendly |
-| Bidirectional, low latency, client sends many messages mid-stream (collaborative editing, voice, games, interrupting an agent token-by-token) | **WebSocket** |
+| Bidirectional, low latency, client sends many messages mid-stream (collaborative editing, voice, games) | **WebSocket** (section 9) |
 
-Why `fetch` over `EventSource` for agents: `EventSource` only does GET with no body and no custom headers. Agent runs need a POST body (messages, tools, settings) and, with bearer auth, an `Authorization` header.
+## 3. Typed event contract
 
-## 2. Typed event contract
-
-Define the stream as a discriminated union of `ApiModel`s. The `type` field is the discriminator on both sides.
+The stream is a discriminated union of `ApiModel`s; the `type` field tells the event kinds apart on both sides.
 
 ```python
 # app/features/agent/events.py
-from typing import Annotated, Any, Literal, Union
-from pydantic import Field, RootModel
-from app.core.schemas import ApiModel
-
-
-class RunStartedEvent(ApiModel):
-    type: Literal["run_started"] = "run_started"
-    run_id: str
-
-
 class TextDeltaEvent(ApiModel):
     type: Literal["text_delta"] = "text_delta"
     text: str
 
 
-class ToolCallEvent(ApiModel):
-    type: Literal["tool_call"] = "tool_call"
-    call_id: str
-    name: str
-    arguments: dict[str, Any]
-
-
-class ToolResultEvent(ApiModel):
-    type: Literal["tool_result"] = "tool_result"
-    call_id: str
-    output: Any
-    is_error: bool = False
-
-
-class Usage(ApiModel):
-    input_tokens: int
-    output_tokens: int
-
-
 class RunCompletedEvent(ApiModel):
     type: Literal["run_completed"] = "run_completed"
     message_id: str
-    usage: Usage | None = None
 
 
 class RunFailedEvent(ApiModel):
@@ -74,21 +208,20 @@ class RunFailedEvent(ApiModel):
     message: str
 
 
-AgentEventUnion = Annotated[
-    Union[RunStartedEvent, TextDeltaEvent, ToolCallEvent, ToolResultEvent, RunCompletedEvent, RunFailedEvent],
-    Field(discriminator="type"),
-]
+AgentEventUnion = Annotated[TextDeltaEvent | RunCompletedEvent | RunFailedEvent, Field(discriminator="type")]
 
 
 class AgentEvent(RootModel[AgentEventUnion]):
-    """Every SSE `data:` payload on agent streams is one of these."""
+    """Every SSE `data:` payload is one of these."""
 ```
 
-Register it for codegen: in `app/scripts/export_openapi.py`, `EXTRA_MODELS = [AgentEvent]`. After `make api`, the frontend has `components['schemas']['AgentEvent']` as a TS union, so `switch (event.type)` is exhaustive. This relies on `json_schema_serialization_defaults_required=True` in `ApiModel` (backend-structure.md): without it the defaulted `type` field is generated as optional and narrowing breaks.
+Register it for codegen: in `app/scripts/export_openapi.py`, `EXTRA_MODELS = [AgentEvent]`. After `make api`, the frontend has `components['schemas']['AgentEvent']` as a TypeScript union. This relies on `json_schema_serialization_defaults_required=True` in `ApiModel` (backend-structure.md); without it the defaulted `type` field is generated as optional and TypeScript can't tell the events apart.
 
-Every stream ends with exactly one terminal event (`run_completed` or `run_failed`). The client treats a stream that closes without one as a dropped connection.
+Every stream ends with exactly one `run_completed` or `run_failed`. The client treats a stream that closes without one as a dropped connection.
 
-## 3. Backend: SSE endpoint
+Add more event types only when the UI uses them (section 6).
+
+## 4. Backend: the SSE response
 
 ```python
 # app/core/sse.py
@@ -116,66 +249,23 @@ SSE_PING = ": ping\n\n"   # comment line; ignored by parsers, keeps proxies from
 
 This hand-rolled response works on any FastAPI version. Recent FastAPI releases also ship a native `fastapi.sse` module (`EventSourceResponse`, `ServerSentEvent`, built-in keepalive). If the project's FastAPI has it, using it is fine; keep the typed `AgentEvent` union, the terminal-event rule, and the export to OpenAPI either way.
 
-```python
-# app/features/agent/router.py
-import asyncio
-import logging
-from fastapi import APIRouter, Request
-from app.api.deps import CurrentUser
-from app.core.sse import EventStreamResponse, format_sse
-from .deps import AgentServiceDep
-from .events import RunFailedEvent
-from .schemas import AgentRunRequest
-from .streaming import with_heartbeat
-
-logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/agent", tags=["agent"])
-
-
-@router.post(
-    "/runs/stream",
-    response_class=EventStreamResponse,
-    responses={200: {"description": "SSE stream of AgentEvent",
-                     "content": {"text/event-stream": {"schema": {"$ref": "#/components/schemas/AgentEvent"}}}}},
-)
-async def stream_agent_run(body: AgentRunRequest, request: Request, user: CurrentUser, agent: AgentServiceDep):
-    async def events():
-        seq = 0
-        try:
-            async for item in with_heartbeat(agent.run(body, user), interval=15):
-                if await request.is_disconnected():
-                    break
-                if isinstance(item, str):          # heartbeat
-                    yield item
-                    continue
-                seq += 1
-                yield format_sse(item, event_id=str(seq))
-        except asyncio.CancelledError:
-            raise                                  # client went away; let cleanup run
-        except Exception:
-            logger.exception("agent run failed")
-            yield format_sse(RunFailedEvent(code="agent_failed", message="The agent run failed"))
-
-    return EventStreamResponse(events())
-```
-
-`agent.run(...)` is an async generator in the service yielding event models. It wraps whatever LLM SDK or agent framework the project uses and translates its native events into `AgentEvent` types, so the frontend contract doesn't change if the provider does.
+Errors before the stream starts (validation, auth, unknown conversation) return normal Problem Details with a 4xx status. Once the 200 and headers are sent, errors can only be reported as a `run_failed` event, so the endpoint wraps the loop:
 
 ```python
-# app/features/agent/service.py (shape only)
-class AgentService:
-    async def run(self, req: AgentRunRequest, user: User) -> AsyncIterator[ApiModel]:
-        run_id = await self.runs.create(user.id, req)
-        yield RunStartedEvent(run_id=run_id)
-        async for chunk in self.llm.stream(...):      # provider SDK
-            yield TextDeltaEvent(text=chunk.text)     # map provider events → contract events
-        message_id = await self.save_final_message(run_id, ...)
-        yield RunCompletedEvent(message_id=message_id, usage=...)
+async def events():
+    try:
+        async for item in with_heartbeat(agent.reply(conversation_id, body.content), interval=15):
+            ...
+    except asyncio.CancelledError:
+        raise                                  # client went away; let cleanup run
+    except Exception:
+        logger.exception("reply failed")
+        yield format_sse(RunFailedEvent(code="reply_failed", message="The assistant could not reply"))
 ```
 
-Validation and auth errors happen before streaming starts, so they still return normal Problem Details with a 4xx status. Once the 200 and headers are sent, errors can only be reported as a `run_failed` event.
+The service turns whatever LLM SDK or agent framework the project uses into these event types, so the frontend doesn't change if the provider does.
 
-## 4. Heartbeats, disconnects, and resources
+## 5. Heartbeats, disconnects, and resources
 
 ```python
 # app/features/agent/streaming.py
@@ -210,129 +300,45 @@ async def with_heartbeat(source: AsyncIterator[T], interval: float = 15.0) -> As
 ```
 
 - **Cancel upstream work on disconnect.** When the client aborts, Starlette cancels the generator; `aclose()` propagates that into the service so the LLM call stops and you stop paying for tokens.
-- **Don't hold a request-scoped DB session for the whole stream.** Streams can last minutes. Inside the service, open short sessions via `session_factory()` for each write (create run, save final message).
+- **Don't hold a request-scoped DB session for the whole stream.** Streams can last minutes. Inside the service, open short sessions via `session_factory()` for each write (save the user message, save the reply).
 - **Persist as you go** if partial output matters: save the final assistant message (or checkpoints) server-side, so a page refresh can load it via a normal GET.
 
-## 5. Frontend: fetch-based SSE client
+## 6. Optional: tool calls and agent steps
 
-```ts
-// features/agent/api/agent.stream.ts
-import { createParser, type EventSourceMessage } from 'eventsource-parser';
-import { ApiError } from '@/lib/http';
-import { env } from '@/config/env';
-import type { AgentEvent, AgentRunRequest } from '../types';  // re-exported from generated schema
+Skip this section for plain chat. Use it when the UI must show what an agent is doing (tool calls with their inputs and results, step lists).
 
-export async function streamAgentRun(
-  body: AgentRunRequest,
-  opts: { signal: AbortSignal; onEvent: (e: AgentEvent) => void; headers?: HeadersInit },
-): Promise<void> {
-  const res = await fetch(`${env.apiBaseUrl}/api/v1/agent/runs/stream`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...opts.headers },
-    body: JSON.stringify(body),
-    signal: opts.signal,
-  });
-  if (!res.ok || !res.body) throw await ApiError.fromResponse(res);  // 4xx before stream = Problem Details
+Add the event types:
 
-  let terminal = false;
-  const parser = createParser({
-    onEvent(msg: EventSourceMessage) {
-      const event = JSON.parse(msg.data) as AgentEvent;
-      if (event.type === 'run_completed' || event.type === 'run_failed') terminal = true;
-      opts.onEvent(event);
-    },
-  });
+```python
+class ToolCallEvent(ApiModel):
+    type: Literal["tool_call"] = "tool_call"
+    call_id: str
+    name: str
+    arguments: dict[str, Any]
 
-  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    parser.feed(value);
-  }
-  if (!terminal && !opts.signal.aborted) throw new ApiError(0, undefined);  // dropped mid-stream
-}
+
+class ToolResultEvent(ApiModel):
+    type: Literal["tool_result"] = "tool_result"
+    call_id: str
+    output: Any
+    is_error: bool = False
 ```
 
-Pass the CSRF header (cookie auth) or `Authorization` (bearer) through `opts.headers` (the template `assets/templates/frontend/agent/agent.stream.ts.template` does this with `authHeaders()` from `lib/http.ts`) — this call bypasses openapi-fetch, so its middleware doesn't run. A small shared `authHeaders()` helper in `lib/http.ts` keeps both paths consistent.
+Keep the section 1 shape (create first, one `try/catch`), and give the stream function one more callback, `onToolCall` / `onToolResult`, rather than switching to a general `onEvent`. Show tool activity in a small `useState` list next to the cached messages, and clear it when the reply finishes and the conversation is refetched. If the server saves tool calls as part of the message, render them from the refetched conversation instead.
 
-## 6. Frontend: `useAgentRun` hook
+A `useReducer` that accumulates the whole run is the right tool only for streams that are **not** chat: a progress view for a long job, or a one-off generation that isn't saved as a conversation. In that case keep the reducer state as the only copy of the data and don't mix it with cached messages.
 
-Streams don't fit TanStack Query's request/response cache, so accumulate with a reducer and hand off to the query cache when done.
+## 7. Optional: reconnect and resume long runs
 
-```ts
-// features/agent/hooks/useAgentRun.ts
-import { useCallback, useEffect, useReducer, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { streamAgentRun } from '../api/agent.stream';
-import { conversationKeys } from '../api/agent.keys';
-import type { AgentEvent, AgentRunRequest } from '../types';
+For short replies (seconds to a couple of minutes), don't resume: on a drop, show "connection lost" and refetch the conversation, which contains whatever the server saved.
 
-type ToolCall = { callId: string; name: string; arguments: unknown; output?: unknown; isError?: boolean };
-type State = {
-  status: 'idle' | 'streaming' | 'done' | 'error';
-  text: string;
-  toolCalls: ToolCall[];
-  runId?: string;
-  error?: string;
-};
-type Action = { type: 'start' } | { type: 'event'; event: AgentEvent } | { type: 'fail'; message: string };
+Only for long agent runs that must survive a page refresh, separate the run from the connection:
 
-const initial: State = { status: 'idle', text: '', toolCalls: [] };
+1. `POST /conversations/{id}/runs` → `202` with `{ runId }`; the run executes in a worker (see other-patterns.md) and appends events to a store (Redis Stream, Postgres table) with sequence numbers.
+2. `GET /runs/{runId}/events` streams from the store and honors the `Last-Event-ID` header (or `?after=`) to replay missed events.
+3. `POST /runs/{runId}/cancel` stops it.
 
-function reducer(state: State, action: Action): State {
-  if (action.type === 'start') return { ...initial, status: 'streaming' };
-  if (action.type === 'fail') return { ...state, status: 'error', error: action.message };
-  const e = action.event;
-  switch (e.type) {
-    case 'run_started':   return { ...state, runId: e.runId };
-    case 'text_delta':    return { ...state, text: state.text + e.text };
-    case 'tool_call':     return { ...state, toolCalls: [...state.toolCalls, { callId: e.callId, name: e.name, arguments: e.arguments }] };
-    case 'tool_result':   return { ...state, toolCalls: state.toolCalls.map((t) => t.callId === e.callId ? { ...t, output: e.output, isError: e.isError } : t) };
-    case 'run_completed': return { ...state, status: 'done' };
-    case 'run_failed':    return { ...state, status: 'error', error: e.message };
-  }
-}
-
-export function useAgentRun(conversationId: string) {
-  const [state, dispatch] = useReducer(reducer, initial);
-  const abortRef = useRef<AbortController | null>(null);
-  const qc = useQueryClient();
-
-  const start = useCallback(async (body: AgentRunRequest) => {
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
-    dispatch({ type: 'start' });
-    try {
-      await streamAgentRun(body, { signal: ac.signal, onEvent: (event) => dispatch({ type: 'event', event }) });
-    } catch (err) {
-      if (!ac.signal.aborted) dispatch({ type: 'fail', message: err instanceof Error ? err.message : 'Stream failed' });
-    } finally {
-      void qc.invalidateQueries({ queryKey: conversationKeys.detail(conversationId) }); // persisted messages
-    }
-  }, [qc, conversationId]);
-
-  const stop = useCallback(() => abortRef.current?.abort(), []);
-  useEffect(() => () => abortRef.current?.abort(), []);   // abort on unmount
-
-  return { ...state, start, stop };
-}
-```
-
-High token rates can cause one render per delta. If profiling shows jank, buffer deltas in a ref and flush on `requestAnimationFrame`. Render streamed Markdown with a sanitizing renderer; never `dangerouslySetInnerHTML` model output.
-
-## 7. Reconnect and resume
-
-For short runs (seconds to a couple of minutes), don't resume: on a drop, show "connection lost", then refetch the conversation — the server persisted whatever completed.
-
-For long agent runs, decouple the run from the connection:
-
-1. `POST /agent/runs` → `202` with `{ runId }`; the run executes in a worker (see other-patterns.md) and appends events to a store (Redis Stream, Postgres table) with sequence numbers.
-2. `GET /agent/runs/{runId}/events` streams from the store; honor the `Last-Event-ID` header (or `?after=`) to replay missed events.
-3. `POST /agent/runs/{runId}/cancel` stops it.
-
-With cookie auth, step 2 can use native `EventSource`, which reconnects and sends `Last-Event-ID` automatically.
+With cookie auth, step 2 can use native `EventSource`, which reconnects and sends `Last-Event-ID` automatically. The run id comes back from step 1, before any streaming, so the frontend still never learns an id partway through a stream.
 
 ## 8. Infrastructure gotchas
 

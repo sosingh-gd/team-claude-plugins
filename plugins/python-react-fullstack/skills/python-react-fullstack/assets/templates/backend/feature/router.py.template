@@ -1,14 +1,24 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 
+from app.api.deps import SessionDep
 from app.core.schemas import CursorPage
 
-from .deps import {{Entity}}ServiceDep
+from .repository import {{Entity}}Repository
 from .schemas import {{Entity}}Create, {{Entity}}Read, {{Entity}}Update
+from .service import {{Entity}}Service
 
 router = APIRouter(prefix="/{{route}}", tags=["{{feature_snake}}"])
+
+
+# Wiring lives here while it is this small. Move it to deps.py only if other modules need it.
+def get_{{entity_snake}}_service(session: SessionDep) -> {{Entity}}Service:
+    return {{Entity}}Service({{Entity}}Repository(session))
+
+
+{{Entity}}ServiceDep = Annotated[{{Entity}}Service, Depends(get_{{entity_snake}}_service)]
 
 # Thin HTTP layer: parse, call the service, return a schema. Function names become operationIds.
 

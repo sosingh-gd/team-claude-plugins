@@ -33,8 +33,7 @@ backend/app/
 │       ├── schemas.py      # OrderCreate / OrderUpdate / OrderRead — the contract
 │       ├── service.py      # business rules; no FastAPI imports
 │       ├── repository.py   # SQLAlchemy queries
-│       ├── models.py       # ORM models
-│       └── deps.py         # OrderServiceDep wiring
+│       └── models.py       # ORM models
 └── scripts/export_openapi.py
 ```
 
@@ -337,30 +336,23 @@ class OrderService:
 ```
 
 ```python
-# app/features/orders/deps.py
+# app/features/orders/router.py
 from typing import Annotated
-from fastapi import Depends
+from uuid import UUID
+from fastapi import APIRouter, Depends, Query, status
 from app.api.deps import SessionDep
+from app.core.schemas import CursorPage
 from .repository import OrderRepository
+from .schemas import OrderCreate, OrderRead, OrderUpdate
 from .service import OrderService
+
+router = APIRouter(prefix="/orders", tags=["orders"])
 
 
 def get_order_service(session: SessionDep) -> OrderService:
     return OrderService(OrderRepository(session))
 
 OrderServiceDep = Annotated[OrderService, Depends(get_order_service)]
-```
-
-```python
-# app/features/orders/router.py
-from typing import Annotated
-from uuid import UUID
-from fastapi import APIRouter, Query, status
-from app.core.schemas import CursorPage
-from .deps import OrderServiceDep
-from .schemas import OrderCreate, OrderRead, OrderUpdate
-
-router = APIRouter(prefix="/orders", tags=["orders"])
 
 
 @router.get("", response_model=CursorPage[OrderRead])
@@ -391,6 +383,8 @@ async def update_order(order_id: UUID, body: OrderUpdate, service: OrderServiceD
 async def delete_order(order_id: UUID, service: OrderServiceDep) -> None:
     await service.delete(order_id)
 ```
+
+The service wiring (`get_order_service`, `OrderServiceDep`) sits at the top of `router.py` because only the router uses it. Move it to a `deps.py` in the feature only when another module needs the same dependency.
 
 Multi-word query params need an explicit alias to stay camelCase: `page_size: Annotated[int, Query(alias="pageSize")] = 20`, or group them in an `ApiModel` and declare `params: Annotated[ListParams, Query()]`.
 

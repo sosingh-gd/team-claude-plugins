@@ -7,7 +7,7 @@
 4. Exporting the OpenAPI spec
 5. Generating TypeScript types
 6. The frontend client (`lib/http.ts`) and `ApiError`
-7. Feature API layer: api / keys / queries
+7. Feature API layer: one file per feature
 8. Forms: mapping 422 errors onto fields
 9. Typed MSW mocks
 10. Drift check in CI
@@ -294,12 +294,15 @@ export type OrderStatus = components['schemas']['OrderStatus'];
 export type OrderListParams = NonNullable<paths['/api/v1/orders']['get']['parameters']['query']>;
 ```
 
-```ts
-// features/orders/api/orders.api.ts — raw calls only
-import { api, unwrap } from '@/lib/http';
-import type { OrderCreate, OrderListParams, OrderUpdate } from '../types';
+Then one file holds the feature's server calls, its query keys and the hooks components use. Start here, and split it into an `api/` folder (`orders.api.ts`, `orders.keys.ts`, `orders.queries.ts`) only once it grows past about 150 lines.
 
-export const ordersApi = {
+```ts
+// features/orders/orders.api.ts
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api, unwrap } from '@/lib/http';
+import type { OrderCreate, OrderListParams, OrderUpdate } from './types';
+
+const ordersApi = {
   list: (query: OrderListParams, signal?: AbortSignal) =>
     unwrap(api.GET('/api/v1/orders', { params: { query }, signal })),
   get: (orderId: string, signal?: AbortSignal) =>
@@ -307,31 +310,14 @@ export const ordersApi = {
   create: (body: OrderCreate) => unwrap(api.POST('/api/v1/orders', { body })),
   update: (orderId: string, body: OrderUpdate) =>
     unwrap(api.PATCH('/api/v1/orders/{order_id}', { params: { path: { order_id: orderId } }, body })),
-  remove: (orderId: string) =>
-    unwrap(api.DELETE('/api/v1/orders/{order_id}', { params: { path: { order_id: orderId } } })),
 };
-```
-
-Path parameter names come from the Python function signature (`order_id`), not the alias generator. If you prefer camelCase there too, name them `orderId` in the route path and signature — just be consistent.
-
-```ts
-// features/orders/api/orders.keys.ts
-import type { OrderListParams } from '../types';
 
 export const orderKeys = {
   all: ['orders'] as const,
   lists: () => [...orderKeys.all, 'list'] as const,
-  list: (params: OrderListParams) => [...orderKeys.lists(), params] as const,
+  list: (params: Omit<OrderListParams, 'cursor'>) => [...orderKeys.lists(), params] as const,
   detail: (id: string) => [...orderKeys.all, 'detail', id] as const,
 };
-```
-
-```ts
-// features/orders/api/orders.queries.ts
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ordersApi } from './orders.api';
-import { orderKeys } from './orders.keys';
-import type { OrderListParams, OrderUpdate } from '../types';
 
 export function useOrdersInfiniteQuery(params: Omit<OrderListParams, 'cursor'>) {
   return useInfiniteQuery({
@@ -372,6 +358,8 @@ export function useUpdateOrderMutation(orderId: string) {
 }
 ```
 
+Path parameter names come from the Python function signature (`order_id`), not the alias generator. If you prefer camelCase there too, name them `orderId` in the route path and signature — just be consistent.
+
 ## 8. Forms: mapping 422 errors onto fields
 
 Client-side Zod validation gives instant feedback; the server stays authoritative. Map server field errors back:
@@ -402,10 +390,12 @@ Keep Zod schemas aligned with Pydantic constraints manually for UX only; if drif
 
 ## 9. Typed MSW mocks
 
+Only needed when the project has frontend tests.
+
 ```ts
-// features/orders/api/orders.mocks.ts
+// features/orders/orders.mocks.ts
 import { http, HttpResponse } from 'msw';
-import type { Order } from '../types';
+import type { Order } from './types';
 
 export const orderFixture: Order = {
   id: '6f1c…', customerId: '9a2b…', status: 'draft', total: '42.00', note: null,

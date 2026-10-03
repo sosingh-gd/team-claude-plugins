@@ -61,7 +61,16 @@ python plugins/python-react-fullstack/skills/python-architecture/scripts/scaffol
 cd order-service && make check
 ```
 
-Types: `fastapi` (`--layout modular|layered`), `library`, `cli`. Options: `--python 3.12`, `--dest`, `--no-sync`, `--no-git`, `--force`.
+Types: `fastapi` (`--layout modular|layered`), `library`, `cli`. Options: `--python 3.12`, `--lint strict|light` (light = fewer ruff rules, for small or learning projects), `--dest`, `--no-sync`, `--no-git`, `--force`.
+
+## Keeping it simple
+
+All three skills read the project's `CLAUDE.md` first and follow it over their own defaults. To get small, readable code (fewer files, no tests, lighter linting), say so there, for example:
+
+```markdown
+Favor clear, readable code over clever abstractions. This is a small learning project:
+use the small-project setup, skip tests, and use the light lint preset.
+```
 
 ## Customizing for your org
 

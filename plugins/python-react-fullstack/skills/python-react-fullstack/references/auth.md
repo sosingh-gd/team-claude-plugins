@@ -169,7 +169,7 @@ Row-level rules ("only the order's owner may edit") go in the service where the 
 ## 6. Frontend: session state and 401 handling
 
 ```ts
-// features/session/api/session.queries.ts
+// features/session/session.api.ts
 export function useMeQuery() {
   return useQuery({
     queryKey: ['session', 'me'],
