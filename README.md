@@ -2,9 +2,11 @@
 
 A shared marketplace of Claude Code plugins and skills. Install once and they work in every project, in the terminal and in the VS Code / JetBrains extensions.
 
-## Available plugins
+## Available skills
 
-| Plugin | What it does |
+One plugin, `python-react-fullstack`, contains all the skills:
+
+| Skill | What it does |
 |---|---|
 | `react-architecture` | Folder structure, import boundaries, swappable design-system layer and coding standards for React + TypeScript + Vite apps |
 | `python-architecture` | uv + Makefile + pyproject standards and a project scaffolder for FastAPI services, libraries and CLIs |
@@ -16,8 +18,6 @@ From a terminal:
 
 ```bash
 claude plugin marketplace add sosingh-gd/team-claude-plugins
-claude plugin install react-architecture@engineering-team
-claude plugin install python-architecture@engineering-team
 claude plugin install python-react-fullstack@engineering-team
 ```
 
@@ -25,16 +25,14 @@ Or inside a Claude Code session (including the VS Code extension):
 
 ```
 /plugin marketplace add sosingh-gd/team-claude-plugins
-/plugin install react-architecture@engineering-team
-/plugin install python-architecture@engineering-team
 /plugin install python-react-fullstack@engineering-team
 ```
 
 Restart the session (or run `/reload-plugins`). Check with `claude plugin list`.
 
-Install only the plugins for your stack. Each skill triggers automatically on matching work (React, Python, or full-stack FastAPI + React). To be explicit, ask Claude to "use the react-architecture skill" "use the python-architecture skill" or "use the python-react-fullstack skill".
+Each skill triggers automatically on matching work (React, Python, or full-stack FastAPI + React). To be explicit, ask Claude to "use the react-architecture skill", "use the python-architecture skill" or "use the python-react-fullstack skill", or call `/python-react-fullstack:<skill-name>`.
 
-Optional: copy `plugins/react-architecture/CLAUDE.example.md` to `~/.claude/CLAUDE.md` so Claude detects React projects and applies the skill consistently.
+Optional: copy `plugins/python-react-fullstack/CLAUDE.example.md` to `~/.claude/CLAUDE.md` so Claude detects React projects and applies the skill consistently.
 
 ## Get updates
 
@@ -54,8 +52,6 @@ Add this to a project's `.claude/settings.json` so anyone opening the repo is pr
     }
   },
   "enabledPlugins": {
-    "react-architecture@engineering-team": true,
-    "python-architecture@engineering-team": true,
     "python-react-fullstack@engineering-team": true
   }
 }
@@ -66,27 +62,21 @@ Add this to a project's `.claude/settings.json` so anyone opening the repo is pr
 ```
 .claude-plugin/marketplace.json          # catalog of all plugins
 plugins/
-├── react-architecture/
-│   ├── .claude-plugin/plugin.json       # plugin manifest (name must match the catalog entry)
-│   ├── CLAUDE.example.md                # optional global CLAUDE.md
-│   └── skills/
-│       └── react-architecture/
-│           ├── SKILL.md
-│           ├── references/
-│           └── assets/templates/
-├── python-architecture/
-│   ├── .claude-plugin/plugin.json
-│   ├── README.md
-│   └── skills/
-│       └── python-architecture/
-│           ├── SKILL.md
-│           ├── references/                  # tooling, fastapi, project-types
-│           ├── assets/templates/            # pyproject, Makefile, Dockerfile, CI, pre-commit
-│           ├── assets/skeletons/            # fastapi-modular, fastapi-layered, library, cli
-│           └── scripts/scaffold.py          # stdlib-only project generator
 └── python-react-fullstack/
-    ├── .claude-plugin/plugin.json
+    ├── .claude-plugin/plugin.json       # plugin manifest (name must match the catalog entry)
+    ├── README.md
+    ├── CLAUDE.example.md                # optional global CLAUDE.md
     └── skills/
+        ├── react-architecture/
+        │   ├── SKILL.md
+        │   ├── references/
+        │   └── assets/templates/
+        ├── python-architecture/
+        │   ├── SKILL.md
+        │   ├── references/                  # tooling, fastapi, project-types
+        │   ├── assets/templates/            # pyproject, Makefile, Dockerfile, CI, pre-commit
+        │   ├── assets/skeletons/            # fastapi-modular, fastapi-layered, library, cli
+        │   └── scripts/scaffold.py          # stdlib-only project generator
         └── python-react-fullstack/
             ├── SKILL.md
             ├── references/                  # api-contract, auth, streaming, backend-structure, dev-setup, other-patterns
@@ -96,14 +86,17 @@ plugins/
 ## Contributing
 
 1. Create a branch and edit the skill files (usually `SKILL.md` or `references/*.md`).
-2. Bump `version` in the plugin's `plugin.json` (semver: patch = wording fixes, minor = new rules, major = changed conventions). Users only receive updates when the version changes.
+2. Bump `version` in `plugins/python-react-fullstack/.claude-plugin/plugin.json` (semver: patch = wording fixes, minor = new rules, major = changed conventions). Users only receive updates when the version changes.
 3. Test locally:
    ```bash
    claude plugin validate .
    claude plugin marketplace add ./      # from your clone
-   claude plugin install react-architecture@engineering-team
-   ```
+      ```
 4. Open a pull request. A code owner reviews before merge.
+
+### Adding a new skill
+
+Create `plugins/python-react-fullstack/skills/<skill-name>/SKILL.md`; it is picked up automatically. Bump the plugin version.
 
 ### Adding a new plugin
 

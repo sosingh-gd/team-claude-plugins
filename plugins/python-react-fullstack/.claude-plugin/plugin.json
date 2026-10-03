@@ -1,7 +1,7 @@
 {
   "name": "python-react-fullstack",
-  "version": "1.0.0",
-  "description": "Full-stack standards for FastAPI + React + TypeScript apps: Pydantic schemas as the single API contract, OpenAPI-generated TypeScript types and typed client, TanStack Query hooks, RFC 9457 errors, auth decision guide, SSE streaming for LLM agents, and dev setup (Vite proxy, CORS, Docker Compose, CI).",
+  "version": "2.0.0",
+  "description": "Python + React standards in one plugin. Skills: react-architecture (atomic-design + feature-module structure, import boundaries, design-system adapter, coding standards for React + TypeScript + Vite), python-architecture (uv, Makefile, pyproject-configured ruff/mypy/pytest, FastAPI modular/layered layouts, project scaffolder) and python-react-fullstack (Pydantic schemas → OpenAPI → generated TypeScript types, typed client, TanStack Query, RFC 9457 errors, auth, SSE streaming, dev setup).",
   "author": {
     "name": "Somveer Singh",
     "email": "sosingh@griddynamics.com",
@@ -9,5 +9,5 @@
   },
   "homepage": "https://github.com/sosingh-gd/team-claude-plugins",
   "repository": "https://github.com/sosingh-gd/team-claude-plugins",
-  "keywords": ["python", "fastapi", "react", "typescript", "openapi", "tanstack-query", "sse", "fullstack"]
+  "keywords": ["python", "fastapi", "uv", "makefile", "ruff", "mypy", "pytest", "react", "typescript", "vite", "openapi", "tanstack-query", "sse", "architecture", "fullstack"]
 }

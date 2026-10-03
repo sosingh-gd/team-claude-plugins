@@ -7,19 +7,9 @@
   },
   "plugins": [
     {
-      "name": "react-architecture",
-      "source": "./plugins/react-architecture",
-      "description": "Folder structure, import boundaries, swappable design-system layer and coding standards for React + TypeScript + Vite apps"
-    },
-    {
-      "name": "python-architecture",
-      "source": "./plugins/python-architecture",
-      "description": "uv, Makefile and pyproject-based standards plus scaffolding for Python projects: FastAPI services (modular, layered, hexagonal), libraries and CLIs"
-    },
-    {
       "name": "python-react-fullstack",
       "source": "./plugins/python-react-fullstack",
-      "description": "FastAPI ↔ React contract standards: Pydantic schemas → OpenAPI → generated TypeScript types, typed client, TanStack Query, errors, auth, SSE streaming and dev setup. Pairs with react-architecture and python-architecture"
+      "description": "React, Python and FastAPI ↔ React full-stack standards in one plugin: react-architecture, python-architecture and python-react-fullstack skills"
     }
   ]
 }
