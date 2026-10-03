@@ -1,0 +1,15 @@
+{
+  "name": "engineering-team",
+  "description": "Shared Claude Code plugins and skills for the engineering team",
+  "owner": {
+    "name": "Somveer Singh",
+    "email": "sosingh@griddynamics.com"
+  },
+  "plugins": [
+    {
+      "name": "react-architecture",
+      "source": "./plugins/react-architecture",
+      "description": "Folder structure, import boundaries, swappable design-system layer and coding standards for React + TypeScript + Vite apps"
+    }
+  ]
+}

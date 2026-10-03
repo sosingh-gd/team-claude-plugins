@@ -1,0 +1,5 @@
+import type { {{Name}}Props } from './{{Name}}.types';
+
+export function {{Name}}({ /* props */ }: {{Name}}Props) {
+  return <div>{/* ... */}</div>;
+}

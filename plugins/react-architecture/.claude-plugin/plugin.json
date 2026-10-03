@@ -1,0 +1,12 @@
+{
+  "name": "react-architecture",
+  "version": "1.0.0",
+  "description": "Hybrid atomic-design + feature-module architecture and best practices for React + TypeScript + Vite",
+  "author": {
+    "name": "Somveer Singh",
+    "email": "sosingh@griddynamics.com",
+    "url": "https://github.com/sosingh-gd"
+  },
+  "homepage": "https://github.com/sosingh-gd/team-claude-plugins",
+  "repository": "https://github.com/sosingh-gd/team-claude-plugins"
+}
