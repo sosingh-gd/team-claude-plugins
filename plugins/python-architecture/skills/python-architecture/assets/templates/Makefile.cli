@@ -1,0 +1,83 @@
+# {{project_name}} - developer commands. Run `make` or `make help` to list targets.
+.DEFAULT_GOAL := help
+SHELL := /bin/bash
+.SHELLFLAGS := -eu -o pipefail -c
+
+UV  ?= uv
+RUN := $(UV) run
+SRC := src tests
+
+##@ Setup
+.PHONY: install
+install: ## Create venv, install all deps from the lockfile, install git hooks
+	$(UV) sync --all-groups
+	@if git rev-parse --git-dir >/dev/null 2>&1; then $(RUN) pre-commit install; \
+	else echo "Not a git repo yet - run 'git init && make install' to enable hooks"; fi
+
+.PHONY: lock
+lock: ## Re-resolve dependencies and update uv.lock
+	$(UV) lock
+
+.PHONY: upgrade
+upgrade: ## Upgrade all dependencies within their constraints
+	$(UV) lock --upgrade
+	$(UV) sync --all-groups
+
+##@ Run
+.PHONY: run
+run: ## Run the CLI: make run args="--help"
+	$(RUN) {{project_name}} $(args)
+
+.PHONY: build
+build: ## Build sdist and wheel into dist/
+	$(UV) build
+
+.PHONY: publish
+publish: build ## Publish to PyPI (needs UV_PUBLISH_TOKEN)
+	$(UV) publish
+
+##@ Quality
+.PHONY: format
+format: ## Auto-format and apply safe lint fixes
+	$(RUN) ruff format $(SRC)
+	$(RUN) ruff check --fix $(SRC)
+
+.PHONY: format-check
+format-check: ## Verify formatting without changing files
+	$(RUN) ruff format --check $(SRC)
+
+.PHONY: lint
+lint: ## Run ruff linter
+	$(RUN) ruff check $(SRC)
+
+.PHONY: typecheck
+typecheck: ## Run mypy
+	$(RUN) mypy $(SRC)
+
+.PHONY: test
+test: ## Run tests
+	$(RUN) pytest
+
+.PHONY: cov
+cov: ## Run tests with coverage report (fails under threshold)
+	$(RUN) pytest --cov --cov-report=term-missing --cov-report=html
+
+.PHONY: check
+check: format-check lint typecheck test ## Everything CI runs - use before every commit/PR
+	$(UV) lock --check
+
+.PHONY: pre-commit
+pre-commit: ## Run all pre-commit hooks against all files
+	$(RUN) pre-commit run --all-files
+
+##@ Housekeeping
+.PHONY: clean
+clean: ## Remove caches and build artifacts
+	rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage dist build
+	find . -type d -name __pycache__ -prune -exec rm -rf {} +
+
+.PHONY: help
+help: ## Show this help
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage: make \033[36m<target>\033[0m\n"} \
+		/^[a-zA-Z0-9_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } \
+		/^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)

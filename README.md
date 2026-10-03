@@ -7,6 +7,7 @@ A shared marketplace of Claude Code plugins and skills. Install once and they wo
 | Plugin | What it does |
 |---|---|
 | `react-architecture` | Folder structure, import boundaries, swappable design-system layer and coding standards for React + TypeScript + Vite apps |
+| `python-architecture` | uv + Makefile + pyproject standards and a project scaffolder for FastAPI services, libraries and CLIs |
 
 ## Install (one time per developer)
 
@@ -15,6 +16,7 @@ From a terminal:
 ```bash
 claude plugin marketplace add sosingh-gd/team-claude-plugins
 claude plugin install react-architecture@engineering-team
+claude plugin install python-architecture@engineering-team
 ```
 
 Or inside a Claude Code session (including the VS Code extension):
@@ -22,11 +24,12 @@ Or inside a Claude Code session (including the VS Code extension):
 ```
 /plugin marketplace add sosingh-gd/team-claude-plugins
 /plugin install react-architecture@engineering-team
+/plugin install python-architecture@engineering-team
 ```
 
 Restart the session (or run `/reload-plugins`). Check with `claude plugin list`.
 
-The skill triggers automatically on React work. To be explicit, ask Claude to "use the react-architecture skill".
+Install only the plugins for your stack. Each skill triggers automatically on matching work (React or Python). To be explicit, ask Claude to "use the react-architecture skill" or "use the python-architecture skill".
 
 Optional: copy `plugins/react-architecture/CLAUDE.example.md` to `~/.claude/CLAUDE.md` so Claude detects React projects and applies the skill consistently.
 
@@ -48,7 +51,8 @@ Add this to a project's `.claude/settings.json` so anyone opening the repo is pr
     }
   },
   "enabledPlugins": {
-    "react-architecture@engineering-team": true
+    "react-architecture@engineering-team": true,
+    "python-architecture@engineering-team": true
   }
 }
 ```
@@ -58,14 +62,24 @@ Add this to a project's `.claude/settings.json` so anyone opening the repo is pr
 ```
 .claude-plugin/marketplace.json          # catalog of all plugins
 plugins/
-└── react-architecture/
-    ├── .claude-plugin/plugin.json       # plugin manifest (name must match the catalog entry)
-    ├── CLAUDE.example.md                # optional global CLAUDE.md
+├── react-architecture/
+│   ├── .claude-plugin/plugin.json       # plugin manifest (name must match the catalog entry)
+│   ├── CLAUDE.example.md                # optional global CLAUDE.md
+│   └── skills/
+│       └── react-architecture/
+│           ├── SKILL.md
+│           ├── references/
+│           └── assets/templates/
+└── python-architecture/
+    ├── .claude-plugin/plugin.json
+    ├── README.md
     └── skills/
-        └── react-architecture/
+        └── python-architecture/
             ├── SKILL.md
-            ├── references/
-            └── assets/templates/
+            ├── references/                  # tooling, fastapi, project-types
+            ├── assets/templates/            # pyproject, Makefile, Dockerfile, CI, pre-commit
+            ├── assets/skeletons/            # fastapi-modular, fastapi-layered, library, cli
+            └── scripts/scaffold.py          # stdlib-only project generator
 ```
 
 ## Contributing

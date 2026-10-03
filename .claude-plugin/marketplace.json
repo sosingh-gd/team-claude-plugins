@@ -10,6 +10,11 @@
       "name": "react-architecture",
       "source": "./plugins/react-architecture",
       "description": "Folder structure, import boundaries, swappable design-system layer and coding standards for React + TypeScript + Vite apps"
+    },
+    {
+      "name": "python-architecture",
+      "source": "./plugins/python-architecture",
+      "description": "uv, Makefile and pyproject-based standards plus scaffolding for Python projects: FastAPI services (modular, layered, hexagonal), libraries and CLIs"
     }
   ]
 }
