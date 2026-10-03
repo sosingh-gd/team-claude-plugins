@@ -1,6 +1,6 @@
 ---
 name: python-react-fullstack
-description: Full-stack standards for a Python FastAPI backend with a React + TypeScript frontend, focused on how they communicate. Covers FastAPI layout (routers, services, repositories), Pydantic schemas as the single source of truth, OpenAPI-generated TypeScript types and a typed fetch client, TanStack Query hooks, RFC 9457 errors, pagination, choosing auth per project (cookie sessions, BFF/OIDC, bearer JWT), SSE streaming for LLM agents, uploads, background jobs, WebSockets, CORS/proxy and dev setup. Use this skill whenever the user builds, scaffolds, reviews or debugs anything crossing the Python–React boundary, such as a new endpoint plus the hook that calls it, frontend types drifting from the backend, CORS or cookie errors, streaming agent output to the UI, SPA login, or any full-stack Python + React app, even if they only mention FastAPI, Pydantic, an endpoint, or connecting a frontend to a backend. Use with react-architecture, which owns frontend folder structure.
+description: Full-stack standards for a Python FastAPI backend with a React + TypeScript frontend, focused on how they communicate. Covers FastAPI layout (routers, services, repositories), Pydantic schemas as the single source of truth, OpenAPI-generated TypeScript types and a typed fetch client, TanStack Query hooks, RFC 9457 errors, pagination, choosing auth per project (cookie sessions, BFF/OIDC, bearer JWT), SSE streaming for LLM agents, uploads, background jobs, WebSockets, CORS/proxy and dev setup. Use this skill whenever the user builds, scaffolds, reviews or debugs anything crossing the Python–React boundary, such as a new endpoint plus the hook that calls it, frontend types drifting from the backend, CORS or cookie errors, streaming agent output to the UI, SPA login, or any full-stack Python + React app, even if they only mention FastAPI, Pydantic, an endpoint, or connecting a frontend to a backend. Use with react-architecture (frontend structure and standards) and python-architecture (backend tooling and Python standards).
 ---
 
 # Python Full-Stack: FastAPI ↔ React
@@ -15,6 +15,24 @@ Pydantic schemas ──► FastAPI app.openapi() ──► contract/openapi.json
                                    openapi-typescript   ▼
 React component ◄── TanStack Query hook ◄── openapi-fetch client ◄── src/lib/api/schema.d.ts
 ```
+
+## Companion skills
+
+This skill owns the **boundary** between backend and frontend. Two companion skills own each side. When they are available (they ship in the same plugin), **load them with the Skill tool** before scaffolding a project or doing substantial work on one side. Don't rebuild their standards from memory.
+
+| Area | Owner |
+|---|---|
+| Repo layout (`backend/`, `frontend/`, `contract/`), API contract, wire format, errors, auth, streaming, root `Makefile` (`dev`, `api`, `api-check`), Vite proxy, `docker-compose.yml` | **this skill** |
+| Backend tooling and Python standards: uv, `[tool.ruff]` / `[tool.mypy]` / `[tool.pytest]` / `[tool.coverage]` in `backend/pyproject.toml`, `backend/Makefile` (`install`, `format`, `lint`, `typecheck`, `test`, `cov`, `check`), pre-commit, Dockerfile, typing, logging, settings | **python-architecture** |
+| Everything under `frontend/src` except the API layer: folder structure, components, design-system adapter, coding standards | **react-architecture** |
+
+How they combine:
+
+- **This skill wins on the contract.** If a companion rule would break a contract rule (e.g. camelCase aliases, `ApiModel`, generated types, one HTTP client), follow this skill.
+- **Backend package location.** Keep the app at `backend/app/` as shown below, not python-architecture's `src/<package>/` layout, because the templates, `app.…` imports and `export_openapi.py` depend on it. Don't run python-architecture's `scaffold.py` for the backend of a full-stack repo; use its templates (`pyproject.fastapi.toml` tool sections, `Makefile.fastapi`, `Dockerfile`, `pre-commit-config.yaml`, `ci.yml`) and adapt paths from `src/<package>` to `app`.
+- **pyproject.** Start from this skill's `project/pyproject.toml` for dependencies and the `pytest-asyncio` settings, then take the tool sections from python-architecture.
+- **Makefiles.** The root `Makefile` (this skill) orchestrates both sides; `backend/Makefile` follows python-architecture. Root `lint`/`test` may call `make -C backend check`.
+- **If a companion skill isn't available,** use this skill's templates and stack defaults as they are.
 
 ## Repository layout
 
@@ -41,7 +59,7 @@ React component ◄── TanStack Query hook ◄── openapi-fetch client ◄
 └── docker-compose.yml
 ```
 
-Backend and frontend **features mirror each other by name** (`backend/app/features/orders` ↔ `frontend/src/features/orders`). This makes it obvious where both halves of a change live. If the `react-architecture` skill is available, follow it for everything under `frontend/src`; this skill only adds the API layer conventions.
+Backend and frontend **features mirror each other by name** (`backend/app/features/orders` ↔ `frontend/src/features/orders`). This makes it obvious where both halves of a change live. Under `frontend/src`, react-architecture owns the structure; this skill only adds the API layer conventions (see Companion skills).
 
 ## The ten rules
 
@@ -117,7 +135,7 @@ Create empty `__init__.py` files in each backend package. The domain columns in 
 
 ## Stack defaults (unless the project already chose otherwise)
 
-- **Backend:** Python 3.12+, FastAPI, Pydantic v2, pydantic-settings, SQLAlchemy 2.x (async) + Alembic, `uv` for dependencies, Ruff + mypy (strict), pytest + pytest-asyncio + httpx.
+- **Backend:** tooling and code standards as in `python-architecture` when available. Python 3.12+, FastAPI, Pydantic v2, pydantic-settings, SQLAlchemy 2.x (async) + Alembic, `uv` for dependencies, Ruff + mypy (strict), pytest + pytest-asyncio + httpx.
 - **Contract:** OpenAPI 3.1 from FastAPI → `openapi-typescript` → `openapi-fetch`. Orval or `@hey-api/openapi-ts` are acceptable if the team prefers generated hooks, but keep hooks inside `features/<f>/api/`.
 - **Frontend:** as in `react-architecture` — Vite, TypeScript strict, TanStack Query, React Hook Form + Zod, Vitest + RTL + MSW.
 - **Streaming:** `StreamingResponse` subclass with `text/event-stream` on the backend; `fetch` + `eventsource-parser` on the frontend.
@@ -127,7 +145,7 @@ If the existing project diverges (Axios instead of openapi-fetch, snake_case JSO
 ## How to respond
 
 - **New feature or endpoint:** start from `assets/templates/backend/feature/` and `frontend/feature/`; show the file tree for both sides first, then each file under a heading with its full path, in workflow order (schemas → service → router → tests → generated-types note → api/keys/queries → component usage). Remind the user to run `make api` between backend and frontend.
-- **Scaffolding a project:** start from `assets/templates/` and produce the full repo layout, `backend/app/main.py`, `core/config.py`, `core/errors.py`, `ApiModel`, one example feature end to end on both sides, `export_openapi.py`, `vite.config.ts` proxy, `lib/http.ts`, `Makefile`, `docker-compose.yml`, and the CI steps from `references/dev-setup.md`.
+- **Scaffolding a project:** first load `python-architecture` and `react-architecture` if available (see Companion skills). Then start from `assets/templates/` and produce the full repo layout, `backend/app/main.py`, `core/config.py`, `core/errors.py`, `ApiModel`, one example feature end to end on both sides, `export_openapi.py`, `vite.config.ts` proxy, `lib/http.ts`, `Makefile`, `docker-compose.yml`, and the CI steps from `references/dev-setup.md`. Apply python-architecture's tooling to `backend/` and react-architecture's structure to `frontend/src`, then run `make check` in `backend/` and the frontend lint and type-check before handing back.
 - **Reviewing or debugging:** list contract violations first (hand-written types duplicating backend schemas, `fetch` in components, ORM objects returned, inconsistent error shapes, tokens in localStorage, wildcard CORS with credentials), then layering issues, then everything else, then the corrected code.
 - **Auth questions:** ask at most one question about deployment shape (same origin? external IdP? non-browser clients?) if it isn't clear from context, then recommend one option from the decision table and say why.
 - Keep explanations short; let the code and structure carry the message.

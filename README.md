@@ -12,9 +12,19 @@ One plugin, `python-react-fullstack`, contains all the skills:
 | `python-architecture` | uv + Makefile + pyproject standards and a project scaffolder for FastAPI services, libraries and CLIs |
 | `python-react-fullstack` | FastAPI ↔ React contract: generated TypeScript types from OpenAPI, typed client, TanStack Query, errors, auth, SSE streaming |
 
-## Install (one time per developer)
+## Install
 
-From a terminal:
+There are two ways to install. Pick one; you do **not** need a `.claude/settings.json` file unless you want a repo to prompt teammates to install.
+
+| | Personal (user scope, default) | Team repo (project scope) |
+|---|---|---|
+| Where it's recorded | your `~/.claude/settings.json` | the repo's `.claude/settings.json` (committed) |
+| Applies to | every project on your machine | anyone who opens that repo |
+| Best for | trying it out, or always having it available | team repos where everyone should follow the same standards |
+
+### Option 1: Personal install (one time per developer)
+
+From a terminal, in any folder:
 
 ```bash
 claude plugin marketplace add sosingh-gd/team-claude-plugins
@@ -28,21 +38,18 @@ Or inside a Claude Code session (including the VS Code extension):
 /plugin install python-react-fullstack@engineering-team
 ```
 
-Restart the session (or run `/reload-plugins`). Check with `claude plugin list`.
+No files are added to any repo.
 
-Each skill triggers automatically on matching work (React, Python, or full-stack FastAPI + React). To be explicit, ask Claude to "use the react-architecture skill", "use the python-architecture skill" or "use the python-react-fullstack skill", or call `/python-react-fullstack:<skill-name>`.
+### Option 2: Team repo install (writes `.claude/settings.json` for you)
 
-Optional: copy `plugins/python-react-fullstack/CLAUDE.example.md` to `~/.claude/CLAUDE.md` so Claude detects React projects and applies the skill consistently.
-
-## Get updates
+From the project's root folder:
 
 ```bash
-claude plugin marketplace update engineering-team
+claude plugin marketplace add sosingh-gd/team-claude-plugins --scope project
+claude plugin install python-react-fullstack@engineering-team --scope project
 ```
 
-## Auto-enable for a project's team
-
-Add this to a project's `.claude/settings.json` so anyone opening the repo is prompted to install it:
+This creates (or updates) `.claude/settings.json` with the marketplace and the enabled plugin. Commit it. Anyone who clones the repo and opens it in Claude Code is prompted to install the plugin, with no commands to run. The generated file looks like this, so you can also write it by hand:
 
 ```json
 {
@@ -55,6 +62,33 @@ Add this to a project's `.claude/settings.json` so anyone opening the repo is pr
     "python-react-fullstack@engineering-team": true
   }
 }
+```
+
+Use `--scope local` instead to enable it only for yourself in one repo (written to the gitignored `.claude/settings.local.json`).
+
+### Verify
+
+Restart the session (or run `/reload-plugins`), then type `/python-react-fullstack:` in Claude Code. You should see `react-architecture`, `python-architecture` and `python-react-fullstack`. From a terminal, `claude plugin list` shows the plugin as enabled.
+
+## Usage
+
+Each skill triggers automatically on matching work (React, Python, or full-stack FastAPI + React). To be explicit, ask Claude to "use the react-architecture skill", "use the python-architecture skill" or "use the python-react-fullstack skill", or call `/python-react-fullstack:<skill-name>`.
+
+Optional: copy `plugins/python-react-fullstack/CLAUDE.example.md` to `~/.claude/CLAUDE.md` so Claude detects React projects and applies the skill consistently.
+
+## Get updates
+
+```bash
+claude plugin marketplace update engineering-team
+claude plugin update python-react-fullstack@engineering-team
+```
+
+Updates arrive only when the plugin's `version` changes. Restart the session afterwards.
+
+## Uninstall
+
+```bash
+claude plugin uninstall python-react-fullstack@engineering-team
 ```
 
 ## Repository layout

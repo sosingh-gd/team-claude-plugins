@@ -37,6 +37,8 @@ claude plugin marketplace add sosingh-gd/team-claude-plugins
 claude plugin install python-react-fullstack@engineering-team
 ```
 
+For a team repo, add `--scope project` to both commands to write `.claude/settings.json` for teammates. See the [root README](../../README.md#install) for details.
+
 ## Usage
 
 Ask Claude naturally and the matching skill activates:
