@@ -1,0 +1,23 @@
+import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
+import { isApiError } from './http';
+
+export const SESSION_KEY = ['session', 'me'] as const;
+
+const onError = (err: unknown) => {
+  if (isApiError(err) && err.status === 401) {
+    // Router guard sees no user and redirects to /login?next=...
+    queryClient.setQueryData(SESSION_KEY, null);
+  }
+};
+
+export const queryClient: QueryClient = new QueryClient({
+  queryCache: new QueryCache({ onError }),
+  mutationCache: new MutationCache({ onError }),
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      // Never retry 4xx; retry 5xx / network errors up to twice.
+      retry: (count, err) => !(isApiError(err) && err.status < 500) && count < 2,
+    },
+  },
+});

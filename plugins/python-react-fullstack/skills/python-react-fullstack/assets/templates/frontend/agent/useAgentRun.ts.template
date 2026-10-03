@@ -1,0 +1,76 @@
+// features/agent/hooks/useAgentRun.ts — streams don't fit the query cache; accumulate with a reducer,
+// then invalidate persisted data when the run ends.
+import { useCallback, useEffect, useReducer, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { streamAgentRun, type AgentEvent, type AgentRunRequest } from '../api/agent.stream';
+
+export type ToolCall = { callId: string; name: string; arguments: unknown; output?: unknown; isError?: boolean };
+
+export type AgentRunState = {
+  status: 'idle' | 'streaming' | 'done' | 'error';
+  text: string;
+  toolCalls: ToolCall[];
+  runId?: string;
+  messageId?: string;
+  error?: string;
+};
+
+type Action = { type: 'start' } | { type: 'event'; event: AgentEvent } | { type: 'fail'; message: string };
+
+const initialState: AgentRunState = { status: 'idle', text: '', toolCalls: [] };
+
+function reducer(state: AgentRunState, action: Action): AgentRunState {
+  if (action.type === 'start') return { ...initialState, status: 'streaming' };
+  if (action.type === 'fail') return { ...state, status: 'error', error: action.message };
+  const e = action.event;
+  switch (e.type) {
+    case 'run_started':
+      return { ...state, runId: e.runId };
+    case 'text_delta':
+      return { ...state, text: state.text + e.text };
+    case 'tool_call':
+      return { ...state, toolCalls: [...state.toolCalls, { callId: e.callId, name: e.name, arguments: e.arguments }] };
+    case 'tool_result':
+      return {
+        ...state,
+        toolCalls: state.toolCalls.map((t) => (t.callId === e.callId ? { ...t, output: e.output, isError: e.isError } : t)),
+      };
+    case 'run_completed':
+      return { ...state, status: 'done', messageId: e.messageId };
+    case 'run_failed':
+      return { ...state, status: 'error', error: e.message };
+    default: {
+      const unhandled: never = e; // compile error if the backend adds an event type
+      return unhandled;
+    }
+  }
+}
+
+/** @param invalidateKey query key of the persisted conversation to refetch when the run ends */
+export function useAgentRun(invalidateKey?: readonly unknown[]) {
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const abortRef = useRef<AbortController | null>(null);
+  const qc = useQueryClient();
+
+  const start = useCallback(
+    async (body: AgentRunRequest) => {
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      dispatch({ type: 'start' });
+      try {
+        await streamAgentRun(body, { signal: ac.signal, onEvent: (event) => dispatch({ type: 'event', event }) });
+      } catch (err) {
+        if (!ac.signal.aborted) dispatch({ type: 'fail', message: err instanceof Error ? err.message : 'Stream failed' });
+      } finally {
+        if (invalidateKey) void qc.invalidateQueries({ queryKey: invalidateKey });
+      }
+    },
+    [qc, invalidateKey],
+  );
+
+  const stop = useCallback(() => abortRef.current?.abort(), []);
+  useEffect(() => () => abortRef.current?.abort(), []); // abort on unmount
+
+  return { ...state, start, stop };
+}

@@ -1,0 +1,46 @@
+from uuid import UUID
+
+from app.core.errors import NotFoundError
+from app.core.schemas import CursorPage
+
+from .models import {{Entity}}
+from .repository import {{Entity}}Repository
+from .schemas import {{Entity}}Create, {{Entity}}Read, {{Entity}}Update
+
+
+class {{Entity}}Service:
+    """Business rules live here. No FastAPI imports: raise app.core.errors types instead."""
+
+    def __init__(self, repo: {{Entity}}Repository) -> None:
+        self.repo = repo
+
+    async def _get_or_404(self, {{entity_snake}}_id: UUID) -> {{Entity}}:
+        obj = await self.repo.get({{entity_snake}}_id)
+        if obj is None:
+            raise NotFoundError(f"{{Entity}} {{{entity_snake}}_id} not found")
+        return obj
+
+    async def get(self, {{entity_snake}}_id: UUID) -> {{Entity}}Read:
+        return {{Entity}}Read.model_validate(await self._get_or_404({{entity_snake}}_id))
+
+    async def list(self, cursor: UUID | None, limit: int) -> CursorPage[{{Entity}}Read]:
+        rows = await self.repo.list_after(cursor, limit)
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        return CursorPage[{{Entity}}Read](
+            items=[{{Entity}}Read.model_validate(r) for r in rows],
+            next_cursor=str(rows[-1].id) if has_more and rows else None,
+        )
+
+    async def create(self, data: {{Entity}}Create) -> {{Entity}}Read:
+        obj = await self.repo.add({{Entity}}(**data.model_dump()))
+        return {{Entity}}Read.model_validate(obj)
+
+    async def update(self, {{entity_snake}}_id: UUID, data: {{Entity}}Update) -> {{Entity}}Read:
+        obj = await self._get_or_404({{entity_snake}}_id)
+        for field, value in data.model_dump(exclude_unset=True).items():
+            setattr(obj, field, value)
+        return {{Entity}}Read.model_validate(await self.repo.save(obj))
+
+    async def delete(self, {{entity_snake}}_id: UUID) -> None:
+        await self.repo.delete(await self._get_or_404({{entity_snake}}_id))

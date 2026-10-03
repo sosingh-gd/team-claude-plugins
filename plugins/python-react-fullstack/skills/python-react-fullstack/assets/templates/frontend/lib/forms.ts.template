@@ -1,0 +1,15 @@
+import type { FieldValues, Path, UseFormSetError } from 'react-hook-form';
+import { isApiError } from './http';
+
+/**
+ * Maps 422 Problem Details field errors onto React Hook Form fields.
+ * Backend field paths are dotted camelCase (e.g. "lines.0.quantity"), matching RHF paths.
+ * Returns false if the error had no field errors (show a toast instead).
+ */
+export function applyServerErrors<T extends FieldValues>(err: unknown, setError: UseFormSetError<T>): boolean {
+  if (!isApiError(err) || err.fieldErrors.length === 0) return false;
+  for (const fe of err.fieldErrors) {
+    setError(fe.field as Path<T>, { type: 'server', message: fe.message });
+  }
+  return true;
+}

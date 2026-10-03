@@ -15,6 +15,11 @@
       "name": "python-architecture",
       "source": "./plugins/python-architecture",
       "description": "uv, Makefile and pyproject-based standards plus scaffolding for Python projects: FastAPI services (modular, layered, hexagonal), libraries and CLIs"
+    },
+    {
+      "name": "python-react-fullstack",
+      "source": "./plugins/python-react-fullstack",
+      "description": "FastAPI ↔ React contract standards: Pydantic schemas → OpenAPI → generated TypeScript types, typed client, TanStack Query, errors, auth, SSE streaming and dev setup. Pairs with react-architecture and python-architecture"
     }
   ]
 }

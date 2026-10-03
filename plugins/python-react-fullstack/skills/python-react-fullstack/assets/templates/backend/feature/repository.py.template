@@ -1,0 +1,36 @@
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from .models import {{Entity}}
+
+
+class {{Entity}}Repository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get(self, {{entity_snake}}_id: UUID) -> {{Entity}} | None:
+        return await self.session.get({{Entity}}, {{entity_snake}}_id)
+
+    async def list_after(self, cursor: UUID | None, limit: int) -> list[{{Entity}}]:
+        """Keyset pagination; fetches limit + 1 rows so the caller can tell if more exist."""
+        stmt = select({{Entity}}).order_by({{Entity}}.id).limit(limit + 1)
+        if cursor is not None:
+            stmt = stmt.where({{Entity}}.id > cursor)
+        return list((await self.session.scalars(stmt)).all())
+
+    async def add(self, obj: {{Entity}}) -> {{Entity}}:
+        self.session.add(obj)
+        await self.session.flush()
+        await self.session.refresh(obj)
+        return obj
+
+    async def save(self, obj: {{Entity}}) -> {{Entity}}:
+        await self.session.flush()
+        await self.session.refresh(obj)
+        return obj
+
+    async def delete(self, obj: {{Entity}}) -> None:
+        await self.session.delete(obj)
+        await self.session.flush()

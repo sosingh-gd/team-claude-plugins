@@ -1,0 +1,8 @@
+# app/api/v1/router.py
+from fastapi import APIRouter
+
+from app.core.errors import COMMON_ERROR_RESPONSES
+from app.features.{{feature_snake}}.router import router as {{feature_snake}}_router
+
+api_router = APIRouter(prefix="/api/v1", responses=COMMON_ERROR_RESPONSES)
+api_router.include_router({{feature_snake}}_router)

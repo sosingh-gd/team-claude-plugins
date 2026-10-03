@@ -1,0 +1,25 @@
+from uuid import UUID
+
+from pydantic import AwareDatetime, Field
+
+from app.core.schemas import ApiModel
+
+
+class {{Entity}}Create(ApiModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+
+
+class {{Entity}}Update(ApiModel):
+    """PATCH body: every field optional; applied with model_dump(exclude_unset=True)."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+
+
+class {{Entity}}Read(ApiModel):
+    id: UUID
+    name: str
+    description: str | None
+    created_at: AwareDatetime
+    updated_at: AwareDatetime

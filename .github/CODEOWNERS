@@ -1,4 +1,5 @@
 # Require review from the maintainers for any change
-*                               @sosingh-gd
-/plugins/react-architecture/    @sosingh-gd
-/plugins/python-architecture/   @sosingh-gd
+*                                 @sosingh-gd
+/plugins/react-architecture/      @sosingh-gd
+/plugins/python-architecture/     @sosingh-gd
+/plugins/python-react-fullstack/  @sosingh-gd

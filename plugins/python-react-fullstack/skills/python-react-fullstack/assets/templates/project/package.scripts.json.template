@@ -1,0 +1,18 @@
+{
+  "//": "Merge into frontend/package.json",
+  "scripts": {
+    "api:gen": "openapi-typescript ../contract/openapi.json -o src/lib/api/schema.d.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5",
+    "eventsource-parser": "^3",
+    "openapi-fetch": "^0.17",
+    "react-hook-form": "^7",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "msw": "^3",
+    "openapi-typescript": "^7"
+  }
+}

@@ -1,0 +1,44 @@
+// features/agent/api/agent.stream.ts — POST + fetch streaming (EventSource can't send a body or headers)
+import { createParser, type EventSourceMessage } from 'eventsource-parser';
+import { env } from '@/config/env';
+import { ApiError, authHeaders } from '@/lib/http';
+import type { components } from '@/lib/api/schema';
+
+export type AgentEvent = components['schemas']['AgentEvent'];
+export type AgentRunRequest = components['schemas']['AgentRunRequest'];
+
+const TERMINAL = new Set<AgentEvent['type']>(['run_completed', 'run_failed']);
+
+export async function streamAgentRun(
+  body: AgentRunRequest,
+  opts: { signal: AbortSignal; onEvent: (e: AgentEvent) => void },
+): Promise<void> {
+  const res = await fetch(`${env.apiBaseUrl}/api/v1/agent/runs/stream`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...authHeaders('POST') },
+    body: JSON.stringify(body),
+    signal: opts.signal,
+  });
+  // Errors before the stream starts (auth, validation) arrive as normal Problem Details.
+  if (!res.ok || !res.body) throw await ApiError.fromResponse(res);
+
+  let terminal = false;
+  const parser = createParser({
+    onEvent(msg: EventSourceMessage) {
+      const event = JSON.parse(msg.data) as AgentEvent;
+      if (TERMINAL.has(event.type)) terminal = true;
+      opts.onEvent(event);
+    },
+  });
+
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    parser.feed(value);
+  }
+  if (!terminal && !opts.signal.aborted) {
+    throw new ApiError(0, undefined); // connection dropped mid-stream
+  }
+}

@@ -1,0 +1,27 @@
+import os
+
+# Point at a throwaway database before the app reads settings.
+# For Postgres parity, use a dedicated test DB, e.g. postgresql+asyncpg://app:app@localhost:5432/app_test
+os.environ.setdefault("APP_DATABASE_URL", "sqlite+aiosqlite:///./test.db")
+os.environ.setdefault("APP_SECRET_KEY", "test-secret")
+
+from collections.abc import AsyncIterator  # noqa: E402
+
+import pytest  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+
+from app.db import session as db  # noqa: E402
+from app.db.base import Base  # noqa: E402
+from app.main import create_app  # noqa: E402
+
+
+@pytest.fixture
+async def client() -> AsyncIterator[AsyncClient]:
+    app = create_app()
+    db.init_engine(os.environ["APP_DATABASE_URL"])  # httpx's ASGITransport doesn't run lifespan
+    async with db.get_engine().begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        yield c
+    await db.dispose_engine()

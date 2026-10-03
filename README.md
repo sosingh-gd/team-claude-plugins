@@ -8,6 +8,7 @@ A shared marketplace of Claude Code plugins and skills. Install once and they wo
 |---|---|
 | `react-architecture` | Folder structure, import boundaries, swappable design-system layer and coding standards for React + TypeScript + Vite apps |
 | `python-architecture` | uv + Makefile + pyproject standards and a project scaffolder for FastAPI services, libraries and CLIs |
+| `python-react-fullstack` | FastAPI ↔ React contract: generated TypeScript types from OpenAPI, typed client, TanStack Query, errors, auth, SSE streaming |
 
 ## Install (one time per developer)
 
@@ -17,6 +18,7 @@ From a terminal:
 claude plugin marketplace add sosingh-gd/team-claude-plugins
 claude plugin install react-architecture@engineering-team
 claude plugin install python-architecture@engineering-team
+claude plugin install python-react-fullstack@engineering-team
 ```
 
 Or inside a Claude Code session (including the VS Code extension):
@@ -25,11 +27,12 @@ Or inside a Claude Code session (including the VS Code extension):
 /plugin marketplace add sosingh-gd/team-claude-plugins
 /plugin install react-architecture@engineering-team
 /plugin install python-architecture@engineering-team
+/plugin install python-react-fullstack@engineering-team
 ```
 
 Restart the session (or run `/reload-plugins`). Check with `claude plugin list`.
 
-Install only the plugins for your stack. Each skill triggers automatically on matching work (React or Python). To be explicit, ask Claude to "use the react-architecture skill" or "use the python-architecture skill".
+Install only the plugins for your stack. Each skill triggers automatically on matching work (React, Python, or full-stack FastAPI + React). To be explicit, ask Claude to "use the react-architecture skill" "use the python-architecture skill" or "use the python-react-fullstack skill".
 
 Optional: copy `plugins/react-architecture/CLAUDE.example.md` to `~/.claude/CLAUDE.md` so Claude detects React projects and applies the skill consistently.
 
@@ -52,7 +55,8 @@ Add this to a project's `.claude/settings.json` so anyone opening the repo is pr
   },
   "enabledPlugins": {
     "react-architecture@engineering-team": true,
-    "python-architecture@engineering-team": true
+    "python-architecture@engineering-team": true,
+    "python-react-fullstack@engineering-team": true
   }
 }
 ```
@@ -70,16 +74,23 @@ plugins/
 │           ├── SKILL.md
 │           ├── references/
 │           └── assets/templates/
-└── python-architecture/
+├── python-architecture/
+│   ├── .claude-plugin/plugin.json
+│   ├── README.md
+│   └── skills/
+│       └── python-architecture/
+│           ├── SKILL.md
+│           ├── references/                  # tooling, fastapi, project-types
+│           ├── assets/templates/            # pyproject, Makefile, Dockerfile, CI, pre-commit
+│           ├── assets/skeletons/            # fastapi-modular, fastapi-layered, library, cli
+│           └── scripts/scaffold.py          # stdlib-only project generator
+└── python-react-fullstack/
     ├── .claude-plugin/plugin.json
-    ├── README.md
     └── skills/
-        └── python-architecture/
+        └── python-react-fullstack/
             ├── SKILL.md
-            ├── references/                  # tooling, fastapi, project-types
-            ├── assets/templates/            # pyproject, Makefile, Dockerfile, CI, pre-commit
-            ├── assets/skeletons/            # fastapi-modular, fastapi-layered, library, cli
-            └── scripts/scaffold.py          # stdlib-only project generator
+            ├── references/                  # api-contract, auth, streaming, backend-structure, dev-setup, other-patterns
+            └── assets/templates/            # backend/, frontend/, project/ ({{placeholder}} templates)
 ```
 
 ## Contributing

@@ -1,0 +1,31 @@
+import asyncio
+from collections.abc import AsyncIterator
+
+from app.core.sse import SSE_PING
+
+
+async def with_heartbeat[T](source: AsyncIterator[T], interval: float = 15.0) -> AsyncIterator[T | str]:
+    """Yield items from source, inserting SSE ping comments during silences (e.g. long tool calls).
+
+    On cancellation (client disconnect) the source is closed, which propagates into the service
+    so the upstream LLM call stops.
+    """
+    it = aiter(source)
+    pending: asyncio.Future[T] = asyncio.ensure_future(anext(it))
+    try:
+        while True:
+            done, _ = await asyncio.wait({pending}, timeout=interval)
+            if not done:
+                yield SSE_PING
+                continue
+            try:
+                item = pending.result()
+            except StopAsyncIteration:
+                return
+            yield item
+            pending = asyncio.ensure_future(anext(it))
+    finally:
+        pending.cancel()
+        aclose = getattr(it, "aclose", None)
+        if aclose is not None:
+            await aclose()

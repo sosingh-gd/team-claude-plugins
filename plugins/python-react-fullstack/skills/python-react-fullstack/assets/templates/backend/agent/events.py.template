@@ -1,0 +1,59 @@
+"""Typed SSE contract for agent runs. Register AgentEvent in scripts/export_openapi.py EXTRA_MODELS."""
+
+from typing import Annotated, Any, Literal
+
+from pydantic import Field, RootModel
+
+from app.core.schemas import ApiModel
+
+
+class RunStartedEvent(ApiModel):
+    type: Literal["run_started"] = "run_started"
+    run_id: str
+
+
+class TextDeltaEvent(ApiModel):
+    type: Literal["text_delta"] = "text_delta"
+    text: str
+
+
+class ToolCallEvent(ApiModel):
+    type: Literal["tool_call"] = "tool_call"
+    call_id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+class ToolResultEvent(ApiModel):
+    type: Literal["tool_result"] = "tool_result"
+    call_id: str
+    output: Any
+    is_error: bool = False
+
+
+class Usage(ApiModel):
+    input_tokens: int
+    output_tokens: int
+
+
+class RunCompletedEvent(ApiModel):
+    type: Literal["run_completed"] = "run_completed"
+    message_id: str
+    usage: Usage | None = None
+
+
+class RunFailedEvent(ApiModel):
+    type: Literal["run_failed"] = "run_failed"
+    code: str
+    message: str
+
+
+AgentEventUnion = Annotated[
+    RunStartedEvent | TextDeltaEvent | ToolCallEvent | ToolResultEvent | RunCompletedEvent | RunFailedEvent,
+    Field(discriminator="type"),
+]
+
+
+class AgentEvent(RootModel[AgentEventUnion]):
+    """Every SSE `data:` payload on agent streams is one of these. Exactly one terminal
+    event (run_completed | run_failed) ends each stream."""

@@ -1,0 +1,40 @@
+from collections.abc import AsyncIterator
+
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+
+_engine: AsyncEngine | None = None
+_sessionmaker: async_sessionmaker[AsyncSession] | None = None
+
+
+def init_engine(url: str) -> None:
+    global _engine, _sessionmaker
+    _engine = create_async_engine(url, pool_pre_ping=True)
+    _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False)
+
+
+def get_engine() -> AsyncEngine:
+    assert _engine is not None, "engine not initialised (call init_engine in lifespan)"
+    return _engine
+
+
+async def dispose_engine() -> None:
+    if _engine is not None:
+        await _engine.dispose()
+
+
+async def get_session() -> AsyncIterator[AsyncSession]:
+    """Request-scoped session: commits on success, rolls back on error."""
+    assert _sessionmaker is not None, "engine not initialised (call init_engine in lifespan)"
+    async with _sessionmaker() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
+def session_factory() -> async_sessionmaker[AsyncSession]:
+    """For work that outlives a request (SSE streams, background jobs): open short sessions."""
+    assert _sessionmaker is not None, "engine not initialised (call init_engine in lifespan)"
+    return _sessionmaker

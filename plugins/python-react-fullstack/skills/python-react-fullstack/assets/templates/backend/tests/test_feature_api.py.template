@@ -1,0 +1,64 @@
+"""Contract tests: exercise the API exactly as the frontend does (camelCase JSON over HTTP)."""
+
+import uuid
+
+from httpx import AsyncClient
+
+BASE = "/api/v1/{{route}}"
+
+
+async def test_create_then_get_returns_camel_case(client: AsyncClient) -> None:
+    r = await client.post(BASE, json={"name": "First", "description": "hello"})
+    assert r.status_code == 201
+    body = r.json()
+    assert {"id", "name", "description", "createdAt", "updatedAt"} <= body.keys()
+
+    r = await client.get(f"{BASE}/{body['id']}")
+    assert r.status_code == 200
+    assert r.json()["name"] == "First"
+
+
+async def test_validation_error_is_problem_details_with_field_paths(client: AsyncClient) -> None:
+    r = await client.post(BASE, json={"name": ""})
+    assert r.status_code == 422
+    assert r.headers["content-type"].startswith("application/problem+json")
+    problem = r.json()
+    assert problem["code"] == "validation_error"
+    assert any(e["field"] == "name" for e in problem["errors"])
+
+
+async def test_missing_returns_404_problem(client: AsyncClient) -> None:
+    r = await client.get(f"{BASE}/{uuid.uuid4()}")
+    assert r.status_code == 404
+    assert r.json()["code"] == "not_found"
+
+
+async def test_patch_only_changes_sent_fields(client: AsyncClient) -> None:
+    created = (await client.post(BASE, json={"name": "A", "description": "keep me"})).json()
+    r = await client.patch(f"{BASE}/{created['id']}", json={"name": "B"})
+    assert r.status_code == 200
+    assert r.json() == {**r.json(), "name": "B", "description": "keep me"}
+
+
+async def test_cursor_pagination(client: AsyncClient) -> None:
+    for i in range(3):
+        await client.post(BASE, json={"name": f"item {i}"})
+    page1 = (await client.get(BASE, params={"limit": 2})).json()
+    assert len(page1["items"]) == 2 and page1["nextCursor"]
+    page2 = (await client.get(BASE, params={"limit": 2, "cursor": page1["nextCursor"]})).json()
+    assert len(page2["items"]) == 1 and page2["nextCursor"] is None
+
+
+async def test_delete(client: AsyncClient) -> None:
+    created = (await client.post(BASE, json={"name": "temp"})).json()
+    assert (await client.delete(f"{BASE}/{created['id']}")).status_code == 204
+    assert (await client.get(f"{BASE}/{created['id']}")).status_code == 404
+
+
+def test_openapi_spec_builds() -> None:
+    """Catches schema/response-class mistakes that only surface when the contract is exported."""
+    from app.scripts.export_openapi import build_spec
+
+    spec = build_spec()
+    assert "/api/v1/{{route}}" in spec["paths"]
+    assert "{{Entity}}Read" in spec["components"]["schemas"]

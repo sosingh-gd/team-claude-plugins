@@ -1,0 +1,19 @@
+// features/{{entities}}/api/{{entities}}.api.ts — raw calls only; components never import this directly.
+import { api, unwrap } from '@/lib/http';
+import type { {{Entity}}Create, {{Entity}}ListParams, {{Entity}}Update } from '../types';
+
+export const {{entities}}Api = {
+  list: (query: {{Entity}}ListParams, signal?: AbortSignal) =>
+    unwrap(api.GET('/api/v1/{{route}}', { params: { query }, signal })),
+
+  get: (id: string, signal?: AbortSignal) =>
+    unwrap(api.GET('/api/v1/{{route}}/{{{entity_snake}}_id}', { params: { path: { {{entity_snake}}_id: id } }, signal })),
+
+  create: (body: {{Entity}}Create) => unwrap(api.POST('/api/v1/{{route}}', { body })),
+
+  update: (id: string, body: {{Entity}}Update) =>
+    unwrap(api.PATCH('/api/v1/{{route}}/{{{entity_snake}}_id}', { params: { path: { {{entity_snake}}_id: id } }, body })),
+
+  remove: (id: string) =>
+    unwrap(api.DELETE('/api/v1/{{route}}/{{{entity_snake}}_id}', { params: { path: { {{entity_snake}}_id: id } } })),
+};

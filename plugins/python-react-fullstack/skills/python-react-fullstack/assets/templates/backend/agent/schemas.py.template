@@ -1,0 +1,15 @@
+from typing import Literal
+
+from pydantic import Field
+
+from app.core.schemas import ApiModel
+
+
+class ChatMessage(ApiModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=50_000)
+
+
+class AgentRunRequest(ApiModel):
+    conversation_id: str | None = None
+    messages: list[ChatMessage] = Field(min_length=1)

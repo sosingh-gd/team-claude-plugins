@@ -1,0 +1,28 @@
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
+
+
+class ApiModel(BaseModel):
+    """Base for every request/response schema: camelCase JSON, snake_case Python."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        validate_by_name=True,  # Pydantic >= 2.11; use populate_by_name=True on older versions
+        validate_by_alias=True,
+        from_attributes=True,  # allows Read.model_validate(orm_obj)
+        # Defaulted response fields are always present in output; mark them required so
+        # TS discriminated unions (e.g. SSE events keyed on `type`) narrow correctly.
+        json_schema_serialization_defaults_required=True,
+    )
+
+
+class CursorPage[T](ApiModel):
+    items: list[T]
+    next_cursor: str | None
+
+
+class OffsetPage[T](ApiModel):
+    items: list[T]
+    total: int
+    page: int
+    page_size: int

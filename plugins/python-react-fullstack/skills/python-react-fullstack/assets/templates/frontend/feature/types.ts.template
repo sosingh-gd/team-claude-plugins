@@ -1,0 +1,7 @@
+// features/{{entities}}/types.ts — domain names for generated types. Never hand-write API shapes.
+import type { components, paths } from '@/lib/api/schema';
+
+export type {{Entity}} = components['schemas']['{{Entity}}Read'];
+export type {{Entity}}Create = components['schemas']['{{Entity}}Create'];
+export type {{Entity}}Update = components['schemas']['{{Entity}}Update'];
+export type {{Entity}}ListParams = NonNullable<paths['/api/v1/{{route}}']['get']['parameters']['query']>;
