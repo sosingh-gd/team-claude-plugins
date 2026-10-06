@@ -3,14 +3,14 @@
 import pytest
 
 from {{package_name}}.items.exceptions import ItemNotFoundError
-from {{package_name}}.items.repository import InMemoryItemRepository
+from {{package_name}}.items.repository import ItemRepository
 from {{package_name}}.items.schemas import ItemCreate, ItemUpdate
 from {{package_name}}.items.service import ItemService
 
 
 @pytest.fixture
 def service() -> ItemService:
-    return ItemService(InMemoryItemRepository())
+    return ItemService(ItemRepository())
 
 
 async def test_create_and_get(service: ItemService) -> None:

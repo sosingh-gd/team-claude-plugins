@@ -1,6 +1,6 @@
 {
   "name": "python-react-fullstack",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Python + React standards in one plugin. Skills: react-architecture (atomic-design + feature-module structure, import boundaries, design-system adapter, coding standards for React + TypeScript + Vite), python-architecture (uv, Makefile, pyproject-configured ruff/mypy/pytest, FastAPI modular/layered layouts, project scaffolder) and python-react-fullstack (Pydantic schemas → OpenAPI → generated TypeScript types, typed client, TanStack Query, RFC 9457 errors, auth, SSE streaming, dev setup).",
   "author": {
     "name": "Somveer Singh",

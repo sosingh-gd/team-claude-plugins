@@ -1,25 +1,16 @@
-"""Data access. The service depends on the Protocol, not on a concrete storage.
+"""Data access for items. Kept in memory so the skeleton runs without a database.
 
-Swap InMemoryItemRepository for a SQLAlchemy implementation without touching
-the service or the router.
+To use a database, rewrite this class with SQLAlchemy and keep its method names;
+the service and router don't change.
 """
 
 from dataclasses import replace
-from typing import Protocol
 
 from {{package_name}}.items.models import Item
 from {{package_name}}.items.schemas import ItemCreate
 
 
-class ItemRepository(Protocol):
-    async def get(self, item_id: int) -> Item | None: ...
-    async def list_all(self, *, offset: int, limit: int) -> list[Item]: ...
-    async def add(self, data: ItemCreate) -> Item: ...
-    async def save(self, item: Item) -> Item: ...
-    async def delete(self, item_id: int) -> None: ...
-
-
-class InMemoryItemRepository:
+class ItemRepository:
     def __init__(self) -> None:
         self._items: dict[int, Item] = {}
         self._next_id = 1

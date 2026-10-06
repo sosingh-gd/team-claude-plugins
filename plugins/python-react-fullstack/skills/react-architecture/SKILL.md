@@ -5,7 +5,17 @@ description: Folder structure, architecture rules and coding standards for React
 
 # React Architecture (Vite + TypeScript, plug-and-play)
 
-The goal of this architecture is **plug-and-play**: any piece (a design system, a feature, an API client) should be replaceable by touching one well-defined place. When a situation isn't covered, choose the option that keeps the swap surface smallest **and** the code easiest to read. If those two pull in different directions on a small project, readability wins.
+The first goal is **code that is easy to read**. The second is **plug-and-play**: a piece (a design system, a feature, an API client) can be replaced by touching one well-defined place. When the two conflict, readability wins. When a situation isn't covered, choose the option a newcomer would understand fastest.
+
+## Readability comes first
+
+When readability and abstraction pull in different directions, choose readability. Someone new to the code should be able to read a file from top to bottom and understand it without jumping through layers.
+
+- **Add an abstraction only for a second real use that exists today.** That covers base classes, Protocols and interfaces, generic helpers, factories, wrappers, and extra layers or files. "We might need it later" is not a reason; adding it later is cheap.
+- **A few repeated lines beat a shared helper that hides what the code does.**
+- **Call things directly.** Use the library or function you need instead of an indirection built for flexibility nobody asked for.
+- **No clever tricks.** Name things for what they do. If a pattern needs a comment to explain how it works, choose a plainer one.
+- **This outranks the rest of this skill.** If a rule below would make this project's code harder to read, favor readability and say in one line which rule you relaxed.
 
 ## Before anything else
 
@@ -17,7 +27,7 @@ The goal of this architecture is **plug-and-play**: any piece (a design system, 
 |---|---|---|
 | Shared components | One file each (`components/atoms/Button.tsx`), props interface inline | Folder per component (`Button/Button.tsx`, `Button.types.ts`, `index.ts`) |
 | Barrel files | None except each feature's `index.ts`; import from the file path | `index.ts` per component and per atomic level |
-| Atoms | Only for design-system primitives the app actually uses | Full design-system wrapper set |
+| Atoms | Only for primitives you customize or reuse; with no plan to switch UI libraries, components may use the library directly | Full design-system wrapper set |
 | Feature API | One `<feature>.api.ts` | Split into `api/` (calls, keys, hooks) when a file passes ~150 lines |
 | ESLint boundary rules | Optional | Recommended |
 | Tests | Only if the project wants them | Vitest + Testing Library + MSW |
@@ -58,7 +68,7 @@ Read `references/structure-and-boundaries.md` for what goes where and the import
 
 1. **Imports flow one way:** `app → pages → features → components / hooks / lib / utils / types`. Shared layers never import from features; features never import from pages or app. A molecule never imports an organism (lower atomic levels never import higher ones).
 2. **Features are sealed.** Other code imports a feature only through its `index.ts`. Features should not import each other; if two features need to cooperate, compose them in a page, or lift the shared piece into `components/` (if UI) or `lib`/`services` (if logic).
-3. **Atoms are the design-system adapter.** Only `components/atoms/*` may import the UI library (MUI, shadcn/Radix, Chakra, AntD…). Atoms expose *our own* prop API — never re-export or spread vendor prop types — so swapping the library means rewriting atoms only. Details and examples: `references/design-system-adapter.md`.
+3. **Atoms are the design-system adapter** (large projects, or any project that may switch UI libraries). Only `components/atoms/*` may import the UI library (MUI, shadcn/Radix, Chakra, AntD…). Atoms expose *our own* prop API — never re-export or spread vendor prop types — so swapping the library means rewriting atoms only. Details and examples: `references/design-system-adapter.md`.
 4. **Shared components are business-agnostic.** A `DataTable` organism takes columns + rows + callbacks; it never knows what a "User" or "Order" is. Anything that knows the domain belongs in a feature.
 5. **Pages are thin.** A page reads route params, picks a template, and drops feature components into slots. No data fetching logic or heavy JSX in pages.
 

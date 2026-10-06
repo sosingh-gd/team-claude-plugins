@@ -36,5 +36,6 @@ Ignore the react-architecture skill entirely and follow the conventions already 
 
 - Read existing code near the change before adding new files; match its patterns.
 - After making changes, run the project's lint, type-check, and test scripts if they exist (`npm run lint`, `npm run typecheck` / `tsc --noEmit`, `npm test`) and fix what you broke.
+- Readability comes before abstraction: no interfaces, base classes, wrappers or extra files without a second real use today.
 - Rules in a project's own `CLAUDE.md` (e.g. "keep it simple", "skip tests") override the skills' defaults.
 - Keep explanations short and in plain words; show the file tree for new files before the code.

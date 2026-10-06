@@ -4,12 +4,12 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from {{package_name}}.repositories.item import InMemoryItemRepository, ItemRepository
+from {{package_name}}.repositories.item import ItemRepository
 from {{package_name}}.services.item import ItemService
 
 # Process-wide store for the in-memory example. With a database, this becomes a
 # repository built from a per-request session dependency instead.
-_repository = InMemoryItemRepository()
+_repository = ItemRepository()
 
 
 def get_item_repository() -> ItemRepository:

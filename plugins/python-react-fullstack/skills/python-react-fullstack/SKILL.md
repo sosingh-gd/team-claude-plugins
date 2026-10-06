@@ -7,13 +7,24 @@ description: Full-stack standards for a Python FastAPI backend with a React + Ty
 
 **Core idea: one contract, flowing one way.** The backend's Pydantic schemas define the API. FastAPI turns them into OpenAPI. The frontend generates TypeScript types from that OpenAPI and calls the API through one typed client. Nobody hand-writes a type the backend already defines, so a breaking backend change becomes a TypeScript compile error instead of a production bug.
 
-When a situation isn't covered below, choose the option that keeps the contract machine-checked end to end.
+When a situation isn't covered below, choose the option that keeps the contract machine-checked end to end and the code easiest to read.
+
+## Readability comes first
+
+When readability and abstraction pull in different directions, choose readability. Someone new to the code should be able to read a file from top to bottom and understand it without jumping through layers.
+
+- **Add an abstraction only for a second real use that exists today.** That covers base classes, Protocols and interfaces, generic helpers, factories, wrappers, and extra layers or files. "We might need it later" is not a reason; adding it later is cheap.
+- **A few repeated lines beat a shared helper that hides what the code does.**
+- **Call things directly.** Use the library or function you need instead of an indirection built for flexibility nobody asked for.
+- **No clever tricks.** Name things for what they do. If a pattern needs a comment to explain how it works, choose a plainer one.
+- **This outranks the rest of this skill.** If a rule below would make this project's code harder to read, favor readability and say in one line which rule you relaxed.
+
+The contract rules (generated types, one HTTP client, one error format) are the exception worth keeping: they remove hand-written code rather than add layers.
 
 ## The project's own rules come first
 
 Read the project's `CLAUDE.md` (and any README conventions) before applying this skill. If it says to keep things simple, favor readable code over abstractions, skip tests, or use a lighter setup, **follow the project**. This skill's defaults (tests on both sides, strict linting, the full folder structure) are a starting point for teams that haven't decided, not rules that override the project. The contract rules below (generated types, one HTTP client, one error format) are the part worth keeping even in a small project, because they are what catch backend/frontend mismatches.
 
-Prefer the plainest code that works. If a pattern needs a comment to explain how it works, choose a simpler one.
 
 ```
 Pydantic schemas ──► FastAPI app.openapi() ──► contract/openapi.json (committed)

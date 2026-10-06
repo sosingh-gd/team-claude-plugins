@@ -99,7 +99,7 @@ src/{{package_name}}/
     ├── router.py      # HTTP only
     ├── schemas.py     # request/response models
     ├── service.py     # business logic
-    ├── repository.py  # data access (Protocol + implementation)
+    ├── repository.py  # data access (a plain class)
     ├── models.py      # domain/ORM model
     ├── dependencies.py
     └── exceptions.py

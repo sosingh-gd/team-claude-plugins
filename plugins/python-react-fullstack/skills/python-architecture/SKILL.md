@@ -9,6 +9,16 @@ This skill encodes a house standard for Python projects. The goal is that every 
 
 **The project's own rules come first.** Read the project's `CLAUDE.md` before applying this skill. If it says to keep things simple, favor readable code over abstractions, skip tests, or relax linting, follow it: use the light lint preset, skip or trim the test suite, and keep the structure small. The defaults below are for teams that haven't decided, not rules that override the project.
 
+## Readability comes first
+
+When readability and abstraction pull in different directions, choose readability. Someone new to the code should be able to read a file from top to bottom and understand it without jumping through layers.
+
+- **Add an abstraction only for a second real use that exists today.** That covers base classes, Protocols and interfaces, generic helpers, factories, wrappers, and extra layers or files. "We might need it later" is not a reason; adding it later is cheap.
+- **A few repeated lines beat a shared helper that hides what the code does.**
+- **Call things directly.** Use the library or function you need instead of an indirection built for flexibility nobody asked for.
+- **No clever tricks.** Name things for what they do. If a pattern needs a comment to explain how it works, choose a plainer one.
+- **This outranks the rest of this skill.** If a rule below would make this project's code harder to read, favor readability and say in one line which rule you relaxed.
+
 ## Core conventions
 
 **uv manages everything.** Python version, virtualenv, dependencies and lockfile all go through uv. Never use `pip install`, `requirements.txt`, Poetry or manual venvs in a project that follows this standard. The commands you need:
@@ -78,6 +88,7 @@ These are the defaults that keep code maintainable as it grows. Explain them to 
 - **Logging, not print.** Use the `logging` module with one configuration point at startup (structured JSON in production is a good default for services). Ruff's `T20` rule enforces no stray prints.
 - **Explicit errors.** Define domain exceptions per module; translate them to HTTP/exit codes at the edge, not deep inside business logic.
 - **Tests mirror the source tree** (unless the project says to skip tests) under `tests/`, use pytest fixtures, and run against real infrastructure where behavior matters (e.g. Testcontainers Postgres instead of SQLite). Aim for meaningful coverage of business logic rather than a number; the template sets a modest `fail_under` the user can raise.
+- **Concrete classes first.** A service takes the concrete repository class. Add a `Protocol` (or an ABC) only when a second real implementation exists; tests can use the real class with in-memory data or `app.dependency_overrides`.
 - **Pure functions where possible**, side effects at the edges. This is what makes code easy to test and to reuse from CLIs, workers and APIs alike.
 
 ## Before you finish

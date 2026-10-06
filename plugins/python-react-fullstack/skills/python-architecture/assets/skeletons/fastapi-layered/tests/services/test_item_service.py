@@ -2,7 +2,7 @@
 
 import pytest
 
-from {{package_name}}.repositories.item import InMemoryItemRepository
+from {{package_name}}.repositories.item import ItemRepository
 from {{package_name}}.schemas.item import ItemCreate, ItemUpdate
 from {{package_name}}.services.exceptions import ItemNotFoundError
 from {{package_name}}.services.item import ItemService
@@ -10,7 +10,7 @@ from {{package_name}}.services.item import ItemService
 
 @pytest.fixture
 def service() -> ItemService:
-    return ItemService(InMemoryItemRepository())
+    return ItemService(ItemRepository())
 
 
 async def test_create_and_get(service: ItemService) -> None:

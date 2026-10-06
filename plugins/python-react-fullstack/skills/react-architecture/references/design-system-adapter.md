@@ -1,5 +1,7 @@
 # Design-System Adapter (making the UI library swappable)
 
+This wrapper layer pays off in large projects or when switching UI libraries is a real possibility. A small project with no such plan can use the library directly in its components, and add an atom only for a primitive it customizes or reuses. Readability comes first (see SKILL.md).
+
 Atoms are the seam between our app and whatever UI library is in use. Everything above atoms (molecules, organisms, templates, features) speaks only our own component API.
 
 ## Rules
